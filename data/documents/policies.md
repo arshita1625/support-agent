@@ -302,3 +302,33 @@ Fair use policies limit:
 - Automated scraping causing server performance degradation
 
 Violations may result in service throttling before suspension.
+
+WEBSITE SECURITY POLICY
+
+SSL Certificate Requirements
+All domains must have valid SSL certificates installed within 30 days of registration. Failure to install SSL may result in security warnings for visitors.
+
+Malware Detection
+Automated malware scanning occurs weekly. If malware is detected:
+1. Domain is immediately quarantined
+2. Customer is notified via email
+3. Cleanup must be completed within 72 hours
+4. Domain remains suspended until verification
+
+DDoS Protection
+Basic DDoS protection is included with all hosting plans. Advanced protection available for high-risk domains or upon request.
+
+EMAIL HOSTING POLICY
+
+Email Account Limits
+- Basic Plan: 10 email accounts maximum
+- Business Plan: 100 email accounts maximum  
+- Enterprise Plan: Unlimited email accounts
+
+Storage Quotas
+- Each email account: 5GB storage limit
+- Automatic cleanup of emails older than 2 years
+- Additional storage available for purchase
+
+Anti-Spam Measures
+All incoming emails filtered through spam detection. False positives can be reported through customer portal.

@@ -324,35 +324,40 @@ class VectorStoreService:
     
    # In services/vector_store.py, replace the get_collection_stats method with this simpler version:
 
-    def get_collection_stats(self) -> Dict[str, Any]:
-        """Get statistics about the document collection."""
+    def get_collection_stats(self, collection_name: str = "support_documents") -> Dict[str, Any]:
+        """Get collection stats using direct HTTP calls."""
+        import requests
         
         try:
-            collection_info = self.client.get_collection(self.collection_name)
+            response = requests.get(f"http://{self.host}:{self.port}/collections/{collection_name}")
             
-            stats = {
-                "collection_name": self.collection_name,
-                "total_points": collection_info.points_count,
-                "vector_size": collection_info.config.params.vectors.size,
-                "distance_metric": collection_info.config.params.vectors.distance.name,
-                "status": collection_info.status.name,
-                "optimizer_status": collection_info.optimizer_status,
-                "indexed_vectors_count": collection_info.indexed_vectors_count
-            }
-            
-            # Skip the complex document type distribution for now
-            # This was causing the connection issue
-            stats["document_type_distribution"] = {}
-            
-            return stats
-            
+            if response.status_code == 200:
+                data = response.json()
+                result = data.get("result", {})
+                
+                return {
+                    "collection_name": collection_name,
+                    "total_points": result.get("points_count", 0),
+                    "status": result.get("status", "unknown"),
+                    "config": result.get("config", {})
+                }
+            else:
+                return {
+                    "collection_name": collection_name,
+                    "total_points": 0,
+                    "status": "error",
+                    "error": f"HTTP {response.status_code}"
+                }
+                
         except Exception as e:
-            logger.error(f"❌ Failed to get collection stats: {e}")
+            logger.error(f"Failed to get collection stats: {e}")
             return {
-                "collection_name": self.collection_name,
-                "error": str(e),
-                "total_points": 0
+                "collection_name": collection_name,
+                "total_points": 0,
+                "status": "error",
+                "error": str(e)
             }
+
 
     def delete_documents(self, chunk_ids: List[str]) -> bool:
         """Delete documents by their chunk IDs.

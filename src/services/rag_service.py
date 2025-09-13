@@ -289,12 +289,7 @@ class RAGService:
                 "retrieval_time_ms": rag_context.retrieval_time_ms,
                 "query_embedding_time_ms": rag_context.query_embedding_time_ms
             },
-            "quality_assessment": retrieval_quality,
-            "ticket_metadata": {
-            "ticket_keywords": ticket.extract_keywords(),  
-            "priority": ticket.priority,                  
-            "urgency_indicator": "high" if ticket.priority in ["high", "urgent"] else "normal"  
-        }
+            "quality_assessment": retrieval_quality
         })
         
         # Determine if escalation is needed based on retrieval quality
