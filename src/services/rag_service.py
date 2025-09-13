@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """RAG service for orchestrating query processing, retrieval, and response generation."""
-
+import os
 import asyncio
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 import time
 from datetime import datetime
-
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -46,14 +45,44 @@ class RAGService:
         # Initialize services
         self.document_processor = document_processor or DocumentProcessorService()
         self.llm_service = llm_service or LLMService()
-        
+        self._startup_check_done = False
         # Configuration
         self.default_retrieval_limit = default_retrieval_limit
         self.min_similarity_threshold = min_similarity_threshold
         self.high_confidence_threshold = high_confidence_threshold
         
-        logger.info("🧠 RAG service initialized")
-    
+        logger.info("RAG service initialized----->")
+    async def ensure_documents_current_on_startup(self) -> bool:
+        """Ensure documents are current when system starts up."""
+        
+        if self._startup_check_done:
+            return True
+        
+        logger.info("🔍 Checking for policy updates on startup...")
+        
+        try:
+            result = await self.document_processor.auto_update_documents_if_needed()
+            
+            if result["success"]:
+                if result.get("updated", False):
+                    logger.info(f"🔄 Documents updated: {result.get('chunks_indexed', 0)} chunks indexed")
+                    logger.info(f"💰 Update cost: ${result.get('cost', 0):.4f}")
+                else:
+                    logger.info("✅ Documents already current")
+                
+                self._startup_check_done = True
+                return True
+            else:
+                logger.error(f"❌ Document update failed: {result.get('error', 'Unknown error')}")
+                logger.info("🔄 Continuing with existing documents...")
+                self._startup_check_done = True
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Startup document check failed: {e}")
+            logger.info("🔄 Continuing with existing documents...")
+            self._startup_check_done = True
+            return False
     async def check_health(self) -> HealthStatus:
         """Check health of all RAG service components."""
         
@@ -489,9 +518,6 @@ class RAGService:
 if __name__ == "__main__":
     print("🧪 Testing RAG Service...")
     print("=" * 50)
-    
-    # Check dependencies
-    import os
     if not os.getenv('OPENAI_API_KEY'):
         print("❌ OPENAI_API_KEY environment variable not set!")
         print("Please set it with: export OPENAI_API_KEY='your-api-key'")

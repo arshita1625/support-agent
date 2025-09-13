@@ -1,4 +1,4 @@
-1. Domain Suspension Policy Document
+## 1. Domain Suspension Policy Document
 Document: Domain Management Policy v2.3
 
 SECTION 4: DOMAIN SUSPENSION GUIDELINES
@@ -63,7 +63,8 @@ Customers may appeal suspensions they believe are in error:
 - Include screenshots, documentation, or third-party verification
 - Appeals reviewed within 5 business days
 - Decision communicated via email with detailed reasoning
-2. Billing Policy Document
+
+## 2. Billing Policy Document
 Document: Billing and Payment Terms v1.8
 
 SECTION 2: PAYMENT FAILURES AND ACCOUNT SUSPENSION
@@ -257,10 +258,10 @@ A: SSL certificate errors can have several causes:
 Try regenerating the certificate through your control panel. If the issue persists, we can manually review the certificate installation.
 Actions: [regenerate_certificate, check_installation]
 Escalation: escalate_to_technical
-5. Sample Abuse and Security Policies
+## 5. Sample Abuse and Security Policies
 Document: Acceptable Use Policy - Security Section
 
-SECTION 6: PROHIBITED ACTIVITIES
+## 6. PROHIBITED ACTIVITIES
 
 6.1 Malicious Software
 Strictly prohibited activities include:
@@ -303,7 +304,7 @@ Fair use policies limit:
 
 Violations may result in service throttling before suspension.
 
-WEBSITE SECURITY POLICY
+## 7. WEBSITE SECURITY POLICY
 
 SSL Certificate Requirements
 All domains must have valid SSL certificates installed within 30 days of registration. Failure to install SSL may result in security warnings for visitors.
@@ -318,17 +319,31 @@ Automated malware scanning occurs weekly. If malware is detected:
 DDoS Protection
 Basic DDoS protection is included with all hosting plans. Advanced protection available for high-risk domains or upon request.
 
-EMAIL HOSTING POLICY
+## 8. EMAIL HOSTING POLICY
 
 Email Account Limits
 - Basic Plan: 10 email accounts maximum
 - Business Plan: 100 email accounts maximum  
 - Enterprise Plan: Unlimited email accounts
 
-Storage Quotas
+## 9. Storage Quotas
 - Each email account: 5GB storage limit
 - Automatic cleanup of emails older than 2 years
 - Additional storage available for purchase
 
-Anti-Spam Measures
+## 10. Anti-Spam Measures
 All incoming emails filtered through spam detection. False positives can be reported through customer portal.
+
+## 11. Backup Schedule
+- Automated daily backups at 2:00 AM EST
+- Full website files and databases included
+- Backup retention: 30 days for all plans
+- Weekly backups stored for 6 months (Business+ plans only)
+
+## 12. Recovery Procedures
+If you need to restore your website:
+1. Submit recovery request through control panel
+2. Select backup date (within available retention period)
+3. Choose full site or selective file restoration
+4. Recovery completes within 2-4 hours during business hours
+5. Overnight recoveries processed by 9:00 AM next day

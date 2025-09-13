@@ -7,7 +7,6 @@ from typing import List
 import logging
 import sys
 from pathlib import Path
-
 sys.path.append(str(Path(__file__).parent.parent))
 
 from models.ticket import SupportTicket
@@ -36,6 +35,18 @@ async def resolve_ticket(request: TicketRequest):
     """Resolve support ticket using RAG pipeline."""
     
     try:
+        import main
+        if main.rag_service is None:
+            logger.info("🔄 Initializing RAG service (not done at startup)")
+            from services.rag_service import RAGService
+            main.rag_service = RAGService()
+            
+            # Check for document updates since startup missed it
+            try:
+                await main.rag_service.ensure_documents_current_on_startup()
+            except Exception as e:
+                logger.warning(f"Document update check failed during endpoint init: {e}")
+
         # Create support ticket
         ticket = SupportTicket(
             ticket_text=request.ticket_text,

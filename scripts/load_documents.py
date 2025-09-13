@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Load support documents into the knowledge base."""
-
+from typing import List
 import sys
 import os
 from pathlib import Path
@@ -355,94 +355,142 @@ class DocumentLoader:
         
         chunks = []
         content = document.content
+        print(f"📄 Chunking document: {len(content)} characters")
         
         # Try to split by markdown sections first
-        if '\n##' in content:
-            # Split by level 2 headings
-            sections = content.split('\n##')
-            current_pos = 0
+        if '##' in content:
+            print("🔍 Found markdown sections, splitting by headers...")
             
-            for i, section in enumerate(sections):
-                if i == 0:
-                    # First section might not start with ##
-                    section_content = section.strip()
+            # Find all section headers and their positions
+            import re
+            section_pattern = r'^##\s+(.+)$'
+            sections = []
+            
+            # Split content by lines to preserve structure
+            lines = content.split('\n')
+            current_section = []
+            current_title = "Introduction"
+            start_pos = 0
+            
+            for i, line in enumerate(lines):
+                if re.match(section_pattern, line.strip()):
+                    # Save previous section if it has content
+                    if current_section:
+                        section_content = '\n'.join(current_section).strip()
+                        if len(section_content) > 50:  # Skip tiny sections
+                            sections.append({
+                                'title': current_title,
+                                'content': section_content,
+                                'start_pos': start_pos,
+                                'end_pos': start_pos + len(section_content)
+                            })
+                    
+                    # Start new section
+                    current_title = re.match(section_pattern, line.strip()).group(1)
+                    current_section = [line]
+                    start_pos = content.find(line)
                 else:
-                    # Add back the ## heading
-                    section_content = f"## {section.strip()}"
+                    current_section.append(line)
+            
+            # Don't forget the last section
+            if current_section:
+                section_content = '\n'.join(current_section).strip()
+                if len(section_content) > 50:
+                    sections.append({
+                        'title': current_title,
+                        'content': section_content,
+                        'start_pos': start_pos,
+                        'end_pos': start_pos + len(section_content)
+                    })
+            
+            print(f"📝 Found {len(sections)} sections")
+            
+            # Create chunks from sections
+            for i, section in enumerate(sections):
+                section_content = section['content']
                 
-                if len(section_content) < 50:  # Skip very small sections
-                    current_pos += len(section_content) + 3  # +3 for \n##
-                    continue
-                
-                # If section is too long, split it further
                 if len(section_content) > chunk_size:
+                    # Split large sections into smaller chunks
+                    print(f"🔄 Section '{section['title']}' too large, splitting...")
                     sub_chunks = self._split_long_content(section_content, chunk_size)
+                    
                     for j, sub_chunk in enumerate(sub_chunks):
                         chunk = DocumentChunk(
                             parent_document_id=document.id,
                             content=sub_chunk,
                             chunk_index=len(chunks),
-                            start_char=current_pos,
-                            end_char=current_pos + len(sub_chunk),
+                            start_char=section['start_pos'] + (j * chunk_size),  # Approximate
+                            end_char=section['start_pos'] + (j * chunk_size) + len(sub_chunk),
                             document_type=document.document_type,
                             metadata={
                                 **document.metadata,
                                 "chunk_focus": self._extract_chunk_focus(sub_chunk),
                                 "parent_title": document.title,
+                                "section_title": section['title'],
                                 "section_index": i,
-                                "sub_chunk_index": j
+                                "sub_chunk_index": j,
+                                "is_sub_chunk": True
                             }
                         )
                         chunks.append(chunk)
-                        current_pos += len(sub_chunk)
                 else:
                     # Section fits in one chunk
                     chunk = DocumentChunk(
                         parent_document_id=document.id,
                         content=section_content,
                         chunk_index=len(chunks),
-                        start_char=current_pos,
-                        end_char=current_pos + len(section_content),
+                        start_char=section['start_pos'],
+                        end_char=section['end_pos'],
                         document_type=document.document_type,
                         metadata={
                             **document.metadata,
                             "chunk_focus": self._extract_chunk_focus(section_content),
                             "parent_title": document.title,
-                            "section_index": i
+                            "section_title": section['title'],
+                            "section_index": i,
+                            "is_sub_chunk": False
                         }
                     )
                     chunks.append(chunk)
-                    current_pos += len(section_content) + 3
         else:
             # No clear sections, use sliding window approach
+            print("📝 No markdown sections found, using sliding window...")
             chunks = self._sliding_window_chunks(document, chunk_size)
         
+        print(f"✅ Created {len(chunks)} chunks")
         return chunks
-    
-    def _split_long_content(self, content: str, chunk_size: int):
-        """Split long content into smaller chunks."""
+
+    def _split_long_content(self, content: str, chunk_size: int) -> List[str]:
+        """Split long content into smaller chunks with overlap."""
+        
         chunks = []
-        overlap = 200  # Character overlap between chunks
+        words = content.split()
+        current_chunk = []
+        current_size = 0
+        overlap_size = chunk_size // 4  # 25% overlap
         
-        start = 0
-        while start < len(content):
-            end = min(start + chunk_size, len(content))
+        for word in words:
+            word_size = len(word) + 1  # +1 for space
             
-            # Try to break at sentence boundaries
-            if end < len(content):
-                sentence_end = content.rfind('.', start, end)
-                if sentence_end > start + chunk_size - 200:
-                    end = sentence_end + 1
-            
-            chunk_content = content[start:end].strip()
-            if len(chunk_content) >= 50:
-                chunks.append(chunk_content)
-            
-            start = end - overlap
-            if start >= len(content) - 50:
-                break
+            if current_size + word_size > chunk_size and current_chunk:
+                # Save current chunk
+                chunk_text = ' '.join(current_chunk)
+                chunks.append(chunk_text)
+                
+                # Start new chunk with overlap
+                overlap_words = current_chunk[-overlap_size:] if len(current_chunk) > overlap_size else current_chunk
+                current_chunk = overlap_words + [word]
+                current_size = sum(len(w) + 1 for w in current_chunk)
+            else:
+                current_chunk.append(word)
+                current_size += word_size
+        
+        # Add final chunk
+        if current_chunk:
+            chunks.append(' '.join(current_chunk))
         
         return chunks
+
     
     def _sliding_window_chunks(self, document: Document, chunk_size: int):
         """Create chunks using sliding window approach."""

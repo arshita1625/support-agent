@@ -10,6 +10,17 @@ This system analyzes customer support queries and returns structured, relevant, 
 - **Relevant policy references** for accurate information
 - **Recommended actions** for proper ticket routing
 
+# Smart Auto-Update System
+
+The RAG system automatically detects policy document changes and updates the knowledge base without manual intervention.
+
+## How It Works
+
+### 🔍 **Automatic Detection**
+- Compares file modification timestamps between source and processed documents
+- Validates vector store consistency on startup
+- Triggers updates only when changes are detected
+
 ## Sample Usage
 
 **Input:**

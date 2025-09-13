@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Document processor service for loading documents into vector store."""
-
+import os
 import asyncio
 import json
 import logging
@@ -44,7 +44,9 @@ class DocumentProcessorService:
         # Initialize services if not provided
         self.vector_store = vector_store or VectorStoreService()
         self.embedding_service = embedding_service or EmbeddingService()
-        
+        self.last_update_check = None
+        self._documents_current = False
+
         # Ensure vector store vector size matches embedding dimensions
         embedding_dims = self.embedding_service.get_embedding_dimensions()
         if self.vector_store.vector_size != embedding_dims:
@@ -55,6 +57,129 @@ class DocumentProcessorService:
             self.vector_store.vector_size = embedding_dims
         
         logger.info("📋 Document processor service initialized")
+    
+    def get_source_files_info(self) -> dict:
+        """Get modification times of all source document files."""
+        source_files = {}
+        documents_dir = Path("data/documents")
+        
+        if documents_dir.exists():
+            for file_path in documents_dir.glob("*.md"):
+                source_files[str(file_path)] = {
+                    'path': str(file_path),
+                    'modified': os.path.getmtime(file_path),
+                    'size': file_path.stat().st_size
+                }
+        
+        return source_files
+    
+    def should_update_documents(self) -> tuple[bool, str]:
+        """Check if documents need updating based on file changes."""
+        
+        # Get current source file info
+        current_sources = self.get_source_files_info()
+        
+        if not current_sources:
+            return False, "No source documents found"
+        
+        # Check if processed files exist
+        processed_chunks = Path("data/processed/chunks.json")
+        processed_docs = Path("data/processed/documents.json")
+        
+        if not (processed_chunks.exists() and processed_docs.exists()):
+            return True, "No processed documents found"
+        
+        # Get processed files modification time
+        processed_time = min(
+            os.path.getmtime(processed_chunks),
+            os.path.getmtime(processed_docs)
+        )
+        
+        # Check if any source file is newer than processed files
+        for file_info in current_sources.values():
+            if file_info['modified'] > processed_time:
+                file_path = file_info['path']
+                return True, f"Source file {file_path} is newer than processed documents"
+        
+        # Check vector store has correct number of documents
+        try:
+            with open(processed_chunks, 'r') as f:
+                chunks = json.load(f)
+            expected_count = len(chunks)
+            
+            from services.vector_store import VectorStoreService
+            vs = VectorStoreService()
+            stats = vs.get_collection_stats()
+            actual_count = stats.get("total_points", 0)
+            
+            if actual_count != expected_count:
+                return True, f"Vector store has {actual_count} documents, expected {expected_count}"
+                
+        except Exception as e:
+            return True, f"Cannot verify vector store: {e}"
+        
+        return False, "Documents are up to date"
+    
+    async def auto_update_documents_if_needed(self) -> dict:
+        """Automatically update documents if source files have changed."""
+        
+        needs_update, reason = self.should_update_documents()
+        
+        if not needs_update:
+            logger.info(f"✅ {reason}")
+            return {"success": True, "updated": False, "reason": reason}
+        
+        logger.info(f"🔄 Auto-updating documents: {reason}")
+        
+        try:
+            # Step 1: Clear old processed files
+            processed_dir = Path("data/processed")
+            for file in processed_dir.glob("*.json"):
+                file.unlink(missing_ok=True)
+            logger.info("🧹 Cleared old processed files")
+            
+            # Step 2: Run document processing
+            import subprocess
+            import sys
+            
+            result = subprocess.run(
+                [sys.executable, "scripts/load_documents.py"],
+                capture_output=True,
+                text=True,
+                cwd="."
+            )
+            
+            if result.returncode != 0:
+                error_msg = f"Document processing failed: {result.stderr}"
+                logger.error(f"❌ {error_msg}")
+                return {"success": False, "error": error_msg}
+            
+            logger.info("✅ Document processing completed")
+            
+            # Step 3: Re-index in vector store
+            logger.info("🔄 Re-indexing vector store...")
+            results = await self.process_and_index_documents(recreate_collection=True)
+            
+            if results.get('success'):
+                chunks_indexed = results.get('chunks_indexed', 0)
+                logger.info(f"✅ Successfully indexed {chunks_indexed} chunks")
+                
+                return {
+                    "success": True,
+                    "updated": True,
+                    "reason": reason,
+                    "chunks_indexed": chunks_indexed,
+                    "cost": results.get('embedding_cost_estimate', 0)
+                }
+            else:
+                error_msg = f"Vector indexing failed: {results.get('errors', [])}"
+                logger.error(f"❌ {error_msg}")
+                return {"success": False, "error": error_msg}
+                
+        except Exception as e:
+            error_msg = f"Auto-update failed: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            return {"success": False, "error": error_msg}
 
     async def check_health(self) -> HealthStatus:
         """Check health of all dependent services."""
