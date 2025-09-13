@@ -77,7 +77,6 @@ docker run -d --name qdrant-server -p 6333:6333 qdrant/qdrant
 
 python services/document_processor.py or python3 services/document_processor.py
 
-
 ### 5. Start the API Server
 
 python main.py or python3 main.py
@@ -92,7 +91,7 @@ curl -X 'POST' \
 
 
 ### Interactive API Documentation
-Visit [**http://localhost:8000/docs**](http://localhost:8000/docs) for Swagger UI with interactive testing.
+Visit [**http://localhost:8000/docs#/**](http://localhost:8000/docs#/) for Swagger UI with interactive testing.
 
 
 ## 🔧 Configuration
@@ -156,10 +155,6 @@ Visit [**http://localhost:8000/docs**](http://localhost:8000/docs) for Swagger U
 - **Average:** 2-4 seconds per ticket
 - **Document Retrieval:** 200-500ms  
 - **LLM Generation:** 1-3 seconds
-
-### Cost Estimates (GPT-3.5-turbo)
-- **Per Ticket:** ~$0.001-0.003
-- **1000 Tickets/month:** ~$1-3
 
 ### Scalability
 - **Concurrent Requests:** 50+ (with proper async handling)
