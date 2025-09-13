@@ -206,6 +206,7 @@ You have access to company documentation and should base your responses on the p
             f"\nPriority: {ticket.priority.title()}"
         ]
         
+        
         # Add ticket metadata if available
         if ticket.customer_id:
             prompt_parts.append(f"Customer Id: {ticket.customer_id}")
