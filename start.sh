@@ -17,3 +17,4 @@ sleep 5
 
 # Run the application
 python main.py
+
