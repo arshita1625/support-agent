@@ -14,7 +14,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from models.document import Document, DocumentChunk
 from models.rag import RetrievedDocument, RAGContext
-from models.common import HealthStatus, ErrorResponse
+from models.common import ErrorResponse
 from services.vector_store import VectorStoreService
 from services.embedding import EmbeddingService
 
@@ -151,7 +151,7 @@ class DocumentProcessorService:
             
             if result.returncode != 0:
                 error_msg = f"Document processing failed: {result.stderr}"
-                logger.error(f"❌ {error_msg}")
+                logger.error(f" {error_msg}")
                 return {"success": False, "error": error_msg}
             
             logger.info("✅ Document processing completed")
@@ -180,78 +180,6 @@ class DocumentProcessorService:
             error_msg = f"Auto-update failed: {str(e)}"
             logger.error(f"❌ {error_msg}")
             return {"success": False, "error": error_msg}
-
-    async def check_health(self) -> HealthStatus:
-        """Check health of all dependent services."""
-        
-        health = HealthStatus(status="healthy", version="1.0.0")
-        
-        # Ensure additional_context exists
-        if not hasattr(health, 'additional_context'):
-            health.additional_context = {}
-        
-        # Check vector store health
-        try:
-            vector_health = await self.vector_store.check_health()
-            health.add_service_status("vector_store", vector_health.is_all_services_healthy())
-            
-            # Include vector store details
-            if hasattr(vector_health, 'additional_context') and vector_health.additional_context:
-                health.additional_context.update({
-                    f"vector_store_{k}": v for k, v in vector_health.additional_context.items()
-                })
-                
-        except Exception as e:
-            health.add_service_status("vector_store", False)
-            logger.error(f"Vector store health check failed: {e}")
-        
-        # Check embedding service health
-        try:
-            embedding_health = await self.embedding_service.check_health()
-            health.add_service_status("embedding_service", embedding_health.is_all_services_healthy())
-            
-            # Include embedding service details
-            if hasattr(embedding_health, 'additional_context') and embedding_health.additional_context:
-                health.additional_context.update({
-                    f"embedding_{k}": v for k, v in embedding_health.additional_context.items()
-                })
-                
-        except Exception as e:
-            health.add_service_status("embedding_service", False)
-            logger.error(f"Embedding service health check failed: {e}")
-        
-        # Check processed documents availability
-        try:
-            chunks_file = self.processed_docs_path / "chunks.json"
-            docs_file = self.processed_docs_path / "documents.json"
-            
-            health.add_service_status("processed_documents", chunks_file.exists() and docs_file.exists())
-            
-            if chunks_file.exists():
-                with open(chunks_file, 'r', encoding='utf-8') as f:
-                    chunks_data = json.load(f)
-                health.additional_context["available_chunks"] = len(chunks_data)
-            else:
-                health.additional_context["available_chunks"] = 0
-                
-        except Exception as e:
-            health.add_service_status("processed_documents", False)
-            logger.error(f"Processed documents check failed: {e}")
-        
-        # Update overall status
-        try:
-            health.update_overall_status()
-        except AttributeError:
-            # Fallback if method doesn't exist
-            unhealthy_services = [name for name, status in health.services.items() if not status]
-            if not unhealthy_services:
-                health.status = "healthy"
-            elif len(unhealthy_services) < len(health.services) / 2:
-                health.status = "degraded"
-            else:
-                health.status = "unhealthy"
-        
-        return health
 
     def load_processed_documents(self) -> Tuple[List[Document], List[DocumentChunk]]:
         """Load documents and chunks from processed files.
@@ -631,23 +559,6 @@ if __name__ == "__main__":
         # Initialize service
         print("\n📋 Initializing Document Processor Service")
         processor = DocumentProcessorService()
-        
-        # Health check
-        print("\n🏥 Testing Health Check")
-        health = await processor.check_health()
-        print(f"   Overall status: {health.status}")
-        print(f"   Services: {health.services}")
-        
-        if not health.is_all_services_healthy():
-            print("\n❌ Some services are unhealthy!")
-            unhealthy = health.get_unhealthy_services()
-            print(f"   Unhealthy services: {unhealthy}")
-            
-            if "processed_documents" in unhealthy:
-                print("\n💡 Run 'python scripts/load_documents.py' first to process documents")
-            
-            return
-        
         # Check if we have processed documents to work with
         try:
             documents, chunks = processor.load_processed_documents()

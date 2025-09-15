@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from models.document import Document, DocumentChunk
-from models.common import HealthStatus, ErrorResponse
+from models.common import ErrorResponse
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -93,42 +93,7 @@ class EmbeddingService:
             "rate_limit_rpm": self.rate_limit_rpm,
             **self.model_specs.get(self.model, {})
         }
-    
-    async def check_health(self) -> HealthStatus:
-        """Check embedding service health and connectivity."""
-        
-        health = HealthStatus(status="healthy", version="1.0.0")
-        
-        try:
-            # Test API connectivity with a simple embedding request
-            start_time = time.time()
-            test_embedding = await self.generate_embeddings(["test"])
-            response_time = time.time() - start_time
-            
-            if test_embedding and len(test_embedding) == 1:
-                health.add_service_status("openai_api", True)
-                health.add_service_status("embedding_generation", True)
-                
-                # Add performance metrics
-                health.additional_context = {
-                    "model": self.model,
-                    "dimensions": self.get_embedding_dimensions(),
-                    "test_response_time_ms": round(response_time * 1000, 2),
-                    "rate_limit_rpm": self.rate_limit_rpm
-                }
-            else:
-                health.add_service_status("openai_api", True)
-                health.add_service_status("embedding_generation", False)
-                
-        except Exception as e:
-            health.add_service_status("openai_api", False)
-            health.add_service_status("embedding_generation", False)
-            logger.error(f"OpenAI API health check failed: {e}")
-        
-        # Update overall status
-        health.update_overall_status()
-        
-        return health
+
     
     def _enforce_rate_limit(self):
         """Enforce rate limiting between API requests."""
@@ -389,17 +354,6 @@ if __name__ == "__main__":
     )
     
     print(f"Model info: {embedding_service.get_model_info()}")
-    
-    # Test health check
-    print("\n🏥 Testing Health Check")
-    health = asyncio.run(embedding_service.check_health())
-    print(f"   Status: {health.status}")
-    print(f"   Services: {health.services}")
-    
-    if not health.services.get("openai_api", False):
-        print("\n❌ OpenAI API is not accessible!")
-        print("Please check your API key and internet connection.")
-        exit(1)
     
     # Test single embedding
     print("\n🔤 Testing Single Embedding")

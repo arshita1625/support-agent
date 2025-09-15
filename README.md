@@ -63,46 +63,20 @@ The RAG system automatically detects policy document changes and updates the kno
 
 Clone the repository
 git clone [your-repo-url]
-cd support-agent-rag
-
-Install dependencies
-pip install -r requirements.txt
+cd support-agent
 
 ### 2. Create .env file
 
-### 3. Start Vector Database
-docker run -d --name qdrant-server -p 6333:6333 qdrant/qdrant
 
-### 4. Initialize Document Index(optional if you dont see processed folder )
+### 3. Start the server
 
-python services/document_processor.py or python3 services/document_processor.py
-
-### 5. Start the API Server
-
-python main.py or python3 main.py
-
-curl -X 'POST' \
-  'http://localhost:8000/resolve-ticket' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "ticket_text": "How can i talk to customer service?"
-}'
-
+./start.sh
 
 ### Interactive API Documentation
 Visit [**http://localhost:8000/docs#/**](http://localhost:8000/docs#/) for Swagger UI with interactive testing.
 
 
 ## 🔧 Configuration
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `OPENAI_API_KEY` | OpenAI API key for embeddings/LLM | Yes |
-| `QDRANT_HOST` | Qdrant server host | No (default: localhost) |
-| `QDRANT_PORT` | Qdrant server port | No (default: 6333) |
 
 ### Model Configuration
 

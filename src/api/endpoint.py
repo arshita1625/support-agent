@@ -69,12 +69,4 @@ async def resolve_ticket(request: TicketRequest):
 
 @router.get("/health")
 async def health_check():
-    """Check system health."""
-    try:
-        health = await rag_service.check_health()
-        return {
-            "status": health.status,
-            "services": health.services
-        }
-    except Exception as e:
-        return {"status": "unhealthy", "error": str(e)}
+        return "ok"

@@ -21,7 +21,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from models.document import Document, DocumentChunk
 from models.rag import RetrievedDocument, RAGContext
-from models.common import HealthStatus, ErrorResponse
+from models.common import ErrorResponse
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -57,52 +57,6 @@ class VectorStoreService:
         self.client = QdrantClient(host=host, port=port)
         
         logger.info(f"🔌 Vector store initialized: {host}:{port}")
-    
-    async def check_health(self) -> HealthStatus:
-        """Check vector store health and connectivity."""
-        
-        health = HealthStatus(status="healthy", version="1.0.0")
-        
-        try:
-            # Check basic connectivity
-            collections = self.client.get_collections()
-            health.add_service_status("qdrant_connection", True)
-            
-            # Check if our collection exists
-            collection_exists = any(
-                col.name == self.collection_name 
-                for col in collections.collections
-            )
-            health.add_service_status("collection_exists", collection_exists)
-            
-            # If collection exists, check its health
-            if collection_exists:
-                try:
-                    collection_info = self.client.get_collection(self.collection_name)
-                    health.add_service_status("collection_healthy", True)
-                    
-                    # Add collection statistics
-                    health.additional_context = {
-                        "collection_name": self.collection_name,
-                        "points_count": collection_info.points_count,
-                        "vector_size": collection_info.config.params.vectors.size,
-                        "distance": collection_info.config.params.vectors.distance.name
-                    }
-                    
-                except Exception as e:
-                    health.add_service_status("collection_healthy", False)
-                    logger.error(f"Collection health check failed: {e}")
-            
-        except Exception as e:
-            health.add_service_status("qdrant_connection", False)
-            logger.error(f"Qdrant connection failed: {e}")
-        
-        # Update overall status
-        health.update_overall_status()
-        
-        return health
-    
-    # Replace the create_collection method with this simpler version:
 
     def create_collection(self, recreate: bool = False) -> bool:
         """Create collection for storing document vectors."""
@@ -432,17 +386,6 @@ if __name__ == "__main__":
     # Initialize service
     print("\n🔌 Initializing Vector Store Service")
     vector_store = VectorStoreService()
-    
-    # Test health check
-    print("\n🏥 Testing Health Check")
-    health = asyncio.run(vector_store.check_health())
-    print(f"   Status: {health.status}")
-    print(f"   Services: {health.services}")
-    
-    if not health.services.get("qdrant_connection", False):
-        print("\n❌ Qdrant is not running!")
-        print("Please start Qdrant with: docker run -p 6333:6333 qdrant/qdrant")
-        exit(1)
     
     # Test collection creation
     print("\n🏗️ Testing Collection Creation")

@@ -9,12 +9,6 @@ import json
 import platform
 import sys
 
-class StatusLevel(Enum):
-    """Enum for system status levels."""
-    HEALTHY = "healthy"
-    DEGRADED = "degraded"
-    UNHEALTHY = "unhealthy"
-
 class LogLevel(Enum):
     """Enum for log levels."""
     DEBUG = "DEBUG"
@@ -22,96 +16,6 @@ class LogLevel(Enum):
     WARNING = "WARNING"
     ERROR = "ERROR"
     CRITICAL = "CRITICAL"
-
-@dataclass
-class HealthStatus:
-    """System health check response for monitoring and diagnostics."""
-    
-    status: Literal["healthy", "degraded", "unhealthy"]
-    services: Dict[str, bool] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=datetime.now)
-    version: str = "1.0.0"
-    uptime_seconds: Optional[float] = None
-    memory_usage_mb: Optional[float] = None
-    
-    def __post_init__(self):
-        """Validate health status after initialization."""
-        valid_statuses = ["healthy", "degraded", "unhealthy"]
-        if self.status not in valid_statuses:
-            raise ValueError(f'status must be one of: {valid_statuses}')
-        
-        # Validate services dictionary
-        if not isinstance(self.services, dict):
-            raise ValueError('services must be a dictionary')
-        
-        for service_name, service_status in self.services.items():
-            if not isinstance(service_name, str):
-                raise ValueError('Service names must be strings')
-            if not isinstance(service_status, bool):
-                raise ValueError('Service statuses must be boolean')
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for API responses."""
-        health_dict = asdict(self)
-        health_dict['timestamp'] = self.timestamp.isoformat()
-        return health_dict
-    
-    def to_json(self) -> str:
-        """Convert to JSON string."""
-        return json.dumps(self.to_dict(), indent=2)
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'HealthStatus':
-        """Create from dictionary."""
-        if isinstance(data.get('timestamp'), str):
-            data['timestamp'] = datetime.fromisoformat(data['timestamp'])
-        return cls(**data)
-    
-    def add_service_status(self, service_name: str, is_healthy: bool) -> None:
-        """Add service health status with validation."""
-        if not isinstance(service_name, str) or not service_name.strip():
-            raise ValueError('Service name must be a non-empty string')
-        if not isinstance(is_healthy, bool):
-            raise ValueError('Service status must be boolean')
-        
-        self.services[service_name.strip()] = is_healthy
-    
-    def is_all_services_healthy(self) -> bool:
-        """Check if all services are healthy."""
-        return all(self.services.values()) if self.services else True
-    
-    def get_unhealthy_services(self) -> List[str]:
-        """Get list of unhealthy services for troubleshooting."""
-        return [name for name, status in self.services.items() if not status]
-    
-    def get_healthy_services(self) -> List[str]:
-        """Get list of healthy services."""
-        return [name for name, status in self.services.items() if status]
-    
-    def update_overall_status(self) -> None:
-        """Update overall status based on service health automatically."""
-        if not self.services:
-            self.status = "healthy"
-            return
-        
-        unhealthy_count = len(self.get_unhealthy_services())
-        total_services = len(self.services)
-        
-        if unhealthy_count == 0:
-            self.status = "healthy"
-        elif unhealthy_count < total_services / 2:
-            self.status = "degraded"  # Less than half are down
-        else:
-            self.status = "unhealthy"  # Half or more are down
-    
-    def get_service_summary(self) -> Dict[str, Any]:
-        """Get summary of service health for dashboards."""
-        return {
-            "total_services": len(self.services),
-            "healthy_services": len(self.get_healthy_services()),
-            "unhealthy_services": len(self.get_unhealthy_services()),
-            "overall_health_percentage": (len(self.get_healthy_services()) / max(len(self.services), 1)) * 100
-        }
 
 @dataclass
 class ErrorResponse:
@@ -495,23 +399,6 @@ class APIResponse:
 # Test the models if run directly
 if __name__ == "__main__":
     print("🧪 Testing Common Models...")
-    
-    # Test 1: HealthStatus
-    print("\n📊 Test 1: HealthStatus")
-    health = HealthStatus(status="healthy")
-    health.add_service_status("qdrant", True)
-    health.add_service_status("openai", True)
-    health.add_service_status("embedding_model", False)
-    
-    print(f"   Status: {health.status}")
-    print(f"   All healthy: {health.is_all_services_healthy()}")
-    print(f"   Unhealthy: {health.get_unhealthy_services()}")
-    
-    # Update overall status based on services
-    health.update_overall_status()
-    print(f"   Updated status: {health.status}")
-    print(f"   Service summary: {health.get_service_summary()}")
-    
     # Test 2: ErrorResponse
     print("\n❌ Test 2: ErrorResponse")
     error = ErrorResponse(
@@ -582,7 +469,6 @@ if __name__ == "__main__":
     # Test 7: Serialization
     print("\n💾 Test 7: Serialization")
     models_to_test = [
-        ("HealthStatus", health),
         ("ErrorResponse", error),
         ("ValidationErrors", validation_errors),
         ("PaginationInfo", pagination),

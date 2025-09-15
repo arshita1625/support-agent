@@ -306,17 +306,17 @@ Violations may result in service throttling before suspension.
 
 ## 7. WEBSITE SECURITY POLICY
 
-SSL Certificate Requirements
+7.1 SSL Certificate Requirements
 All domains must have valid SSL certificates installed within 30 days of registration. Failure to install SSL may result in security warnings for visitors.
 
-Malware Detection
+7.2 Malware Detection
 Automated malware scanning occurs weekly. If malware is detected:
 1. Domain is immediately quarantined
 2. Customer is notified via email
 3. Cleanup must be completed within 72 hours
 4. Domain remains suspended until verification
 
-DDoS Protection
+7.3 DDoS Protection
 Basic DDoS protection is included with all hosting plans. Advanced protection available for high-risk domains or upon request.
 
 ## 8. EMAIL HOSTING POLICY

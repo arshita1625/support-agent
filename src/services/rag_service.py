@@ -13,7 +13,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from models.ticket import SupportTicket
 from models.response import MCPResponse
 from models.rag import RetrievedDocument, RAGContext
-from models.common import HealthStatus, ErrorResponse
+from models.common import ErrorResponse
 from services.document_processor import DocumentProcessorService
 from services.llm_service import LLMService
 
@@ -83,64 +83,6 @@ class RAGService:
             logger.info("🔄 Continuing with existing documents...")
             self._startup_check_done = True
             return False
-    async def check_health(self) -> HealthStatus:
-        """Check health of all RAG service components."""
-        
-        health = HealthStatus(status="healthy", version="1.0.0")
-        
-        # Ensure additional_context exists
-        if not hasattr(health, 'additional_context'):
-            health.additional_context = {}
-        
-        # Check document processor health
-        try:
-            processor_health = await self.document_processor.check_health()
-            health.add_service_status("document_processor", processor_health.is_all_services_healthy())
-            
-            if hasattr(processor_health, 'additional_context') and processor_health.additional_context:
-                health.additional_context.update({
-                    f"processor_{k}": v for k, v in processor_health.additional_context.items()
-                })
-                
-        except Exception as e:
-            health.add_service_status("document_processor", False)
-            logger.error(f"Document processor health check failed: {e}")
-        
-        # Check LLM service health
-        try:
-            llm_health = await self.llm_service.check_health()
-            health.add_service_status("llm_service", llm_health.is_all_services_healthy())
-            
-            if hasattr(llm_health, 'additional_context') and llm_health.additional_context:
-                health.additional_context.update({
-                    f"llm_{k}": v for k, v in llm_health.additional_context.items()
-                })
-                
-        except Exception as e:
-            health.add_service_status("llm_service", False)
-            logger.error(f"LLM service health check failed: {e}")
-        
-        # Add RAG-specific context
-        health.additional_context.update({
-            "retrieval_limit": self.default_retrieval_limit,
-            "similarity_threshold": self.min_similarity_threshold,
-            "confidence_threshold": self.high_confidence_threshold
-        })
-        
-        # Update overall status
-        try:
-            health.update_overall_status()
-        except AttributeError:
-            # Fallback if method doesn't exist
-            unhealthy_services = [name for name, status in health.services.items() if not status]
-            if not unhealthy_services:
-                health.status = "healthy"
-            elif len(unhealthy_services) < len(health.services) / 2:
-                health.status = "degraded"
-            else:
-                health.status = "unhealthy"
-        
-        return health
     
     async def process_support_ticket(
         self,
@@ -527,19 +469,6 @@ if __name__ == "__main__":
         # Initialize RAG service
         print("\n🧠 Initializing RAG Service")
         rag_service = RAGService()
-        
-        # Health check
-        print("\n🏥 Testing Health Check")
-        health = await rag_service.check_health()
-        print(f"   Overall status: {health.status}")
-        print(f"   Services: {health.services}")
-        
-        if not health.is_all_services_healthy():
-            print("\n❌ Some services are unhealthy!")
-            unhealthy = health.get_unhealthy_services()
-            print(f"   Unhealthy services: {unhealthy}")
-            return
-        
         # Test single ticket processing
         print("\n🎫 Testing Single Ticket Processing")
         test_ticket = SupportTicket(

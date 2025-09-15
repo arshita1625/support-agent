@@ -24,7 +24,6 @@ sys.path.append(str(Path(__file__).parent.parent))
 from models.ticket import SupportTicket
 from models.response import MCPResponse
 from models.rag import RAGContext
-from models.common import HealthStatus
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -105,64 +104,6 @@ class LLMService:
             "timeout": self.timeout,
             **self.model_specs.get(self.model, {})
         }
-    
-    async def check_health(self) -> HealthStatus:
-        """Check LLM service health and connectivity."""
-        
-        health = HealthStatus(status="healthy", version="1.0.0")
-        
-        # Ensure additional_context exists
-        if not hasattr(health, 'additional_context'):
-            health.additional_context = {}
-        
-        try:
-            # Test API connectivity with a simple completion
-            start_time = time.time()
-            
-            test_response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": "Reply with 'OK' if you can process this."}],
-                max_tokens=10,
-                temperature=0
-            )
-            
-            response_time = time.time() - start_time
-            
-            if test_response.choices and test_response.choices[0].message.content:
-                health.add_service_status("openai_api", True)
-                health.add_service_status("model_access", True)
-                
-                # Add performance metrics
-                health.additional_context.update({
-                    "model": self.model,
-                    "test_response_time_ms": round(response_time * 1000, 2),
-                    "context_window": self.model_specs.get(self.model, {}).get("context_window", "unknown"),
-                    "usage_stats": self.usage_stats.copy()
-                })
-            else:
-                health.add_service_status("openai_api", True)
-                health.add_service_status("model_access", False)
-                
-        except Exception as e:
-            health.add_service_status("openai_api", False)
-            health.add_service_status("model_access", False)
-            logger.error(f"OpenAI API health check failed: {e}")
-            health.additional_context["health_check_error"] = str(e)
-        
-        # Update overall status
-        try:
-            health.update_overall_status()
-        except AttributeError:
-            # Fallback if method doesn't exist
-            unhealthy_services = [name for name, status in health.services.items() if not status]
-            if not unhealthy_services:
-                health.status = "healthy"
-            elif len(unhealthy_services) < len(health.services) / 2:
-                health.status = "degraded"
-            else:
-                health.status = "unhealthy"
-        
-        return health
     
     def _build_system_prompt(self, ticket: SupportTicket) -> str:
         """Build system prompt based on ticket characteristics."""
@@ -528,16 +469,6 @@ if __name__ == "__main__":
         )
         
         print(f"Model info: {llm_service.get_model_info()}")
-        
-        # Health check
-        print("\n🏥 Testing Health Check")
-        health = await llm_service.check_health()
-        print(f"   Status: {health.status}")
-        print(f"   Services: {health.services}")
-        
-        if not health.services.get("openai_api", False):
-            print("\n❌ OpenAI API is not accessible!")
-            return
         
         # Test response generation
         print("\n💬 Testing Response Generation")
