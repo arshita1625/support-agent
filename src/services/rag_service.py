@@ -82,7 +82,6 @@ class RAGService:
                 raise ValueError("Ticket text cannot be empty")
             
             # 2. Retrieve relevant documents
-            logger.info("🔍 Retrieving relevant documents...")
             retrieval_limit = retrieval_limit or self.default_retrieval_limit
             
             rag_context = await self.document_processor.search_documents(

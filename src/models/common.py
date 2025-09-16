@@ -416,7 +416,6 @@ if __name__ == "__main__":
     print(f"   Details: {error.details}")
     
     # Test 3: ValidationErrors
-    print("\n🔍 Test 3: ValidationErrors")
     validation_errors = ValidationErrors()
     validation_errors.add_error("ticket_text", "Must be at least 10 characters", "hi", "min_length")
     validation_errors.add_error("priority", "Invalid priority level", "super_high", "allowed_values")
@@ -429,7 +428,6 @@ if __name__ == "__main__":
         print(f"     • {msg}")
     
     # Test 4: PaginationInfo
-    print("\n📄 Test 4: PaginationInfo")
     pagination = PaginationInfo(page=2, page_size=10, total_items=25)
     print(f"   Page {pagination.page}/{pagination.total_pages}")
     print(f"   Has next: {pagination.has_next}")
@@ -487,9 +485,9 @@ if __name__ == "__main__":
             # Test restoration from dict (where available)
             if hasattr(model_instance.__class__, 'from_dict'):
                 restored = model_instance.__class__.from_dict(model_dict)
-                print(f"   ✅ {model_name}: serialization & deserialization successful")
+                print(f" {model_name}: serialization & deserialization successful")
             else:
-                print(f"   ✅ {model_name}: serialization successful")
+                print(f" {model_name}: serialization successful")
         except Exception as e:
             print(f"   ❌ {model_name}: serialization failed - {e}")
     

@@ -246,7 +246,7 @@ class DocumentProcessorService:
                 valid_chunks, embeddings = await self.embedding_service.embed_document_chunks(chunks)
                 embedding_time = time.time() - embedding_start
                 
-                logger.info(f"✅ Generated {len(embeddings)} embeddings in {embedding_time:.2f}s")
+                logger.info(f" Generated {len(embeddings)} embeddings in {embedding_time:.2f}s")
                 
             finally:
                 
@@ -316,7 +316,7 @@ class DocumentProcessorService:
             )
             retrieval_time = time.time() - retrieval_start
             
-            logger.info(f"📊 Found {len(retrieved_docs)} relevant documents")
+            logger.info(f"Found {len(retrieved_docs)} relevant documents")
             
             
             collection_stats = self.vector_store.get_collection_stats()

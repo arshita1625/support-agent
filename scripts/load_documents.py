@@ -314,7 +314,6 @@ class DocumentLoader:
         print(f" Chunking document: {len(content)} characters")
         
         if '##' in content:
-            print("🔍 Found markdown sections, splitting by headers...")
             import re
             section_pattern = r'^##\s+(.+)$'
             sections = []

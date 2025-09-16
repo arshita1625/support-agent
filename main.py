@@ -43,11 +43,11 @@ async def startup_event():
         global rag_service
         rag_service = RAGService()
         
-        print("🔍 Checking for policy updates...")
+        print("Checking for policy updates...")
         updated = await rag_service.ensure_documents_current_on_startup()
         
         if updated:
-            print("✅ Policy check completed")
+            print(" Policy check completed")
         else:
             print("⚠️ Policy update had issues, but system is operational")
             
