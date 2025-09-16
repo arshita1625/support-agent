@@ -64,7 +64,6 @@ documents_dir = project_root / "data" / "documents"
 router = APIRouter()
 
 async def trigger_complete_rag_pipeline():
-    """Trigger the complete RAG pipeline: process documents + update vector DB."""
     try:
         print("Starting complete RAG pipeline...")
         
@@ -81,7 +80,6 @@ async def trigger_complete_rag_pipeline():
             # Import RAG service
             from src.services.rag_service import RAGService
             
-            # Get or create RAG service instance
             import main
             if not hasattr(main, 'rag_service') or main.rag_service is None:
                 print("Initializing RAG service...")
@@ -91,7 +89,6 @@ async def trigger_complete_rag_pipeline():
             await main.rag_service.ensure_documents_current_on_startup()
             print("RAG service updated successfully")
             
-            # Count chunks created
             import json
             chunks_file = project_root / "data" / "processed" / "chunks.json"
             chunks_count = 0
@@ -107,7 +104,6 @@ async def trigger_complete_rag_pipeline():
             
             # Fallback: Try direct vector store update
             try:
-                print("Attempting direct vector store update...")
                 from src.services.vector_store import VectorStoreService
                 from src.services.embedding_service import EmbeddingService
                 
@@ -173,15 +169,12 @@ async def trigger_complete_rag_pipeline():
         return False, 0
 
 def background_processing_worker(job_id: str, filename: str):
-    """Background worker function that runs in a separate thread."""
     try:
         # Update job status
         processing_jobs[job_id]["status"] = "processing"
         processing_jobs[job_id]["progress"] = "Starting document processing..."
         
-        print(f"Background processing started for job {job_id}")
-        
-        # Create a new event loop for this thread
+        print(f"Background processing started for job. IT TAKES ~5 SECONDS TO COMPLETE")
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
@@ -195,7 +188,7 @@ def background_processing_worker(job_id: str, filename: str):
                 processing_jobs[job_id]["progress"] = f"Processing completed successfully - {chunks_created} chunks created"
                 processing_jobs[job_id]["chunks_created"] = chunks_created
                 processing_jobs[job_id]["completed_at"] = datetime.now().isoformat()
-                print(f"Background processing completed for job {job_id}")
+                print(f"Background processing completed for job")
             else:
                 processing_jobs[job_id]["status"] = "failed"
                 processing_jobs[job_id]["progress"] = "Processing completed with errors"
@@ -212,7 +205,7 @@ def background_processing_worker(job_id: str, filename: str):
         processing_jobs[job_id]["completed_at"] = datetime.now().isoformat()
         print(f"Background processing failed for job {job_id}: {e}")
 
-@router.post("/upload", response_model=UploadResponse)
+@router.post("/", response_model=UploadResponse)
 async def upload_markdown_file(
     file: UploadFile = File(..., description="Markdown file to upload"),
     process_immediately: bool = Form(True, description="Process the file immediately after upload")
@@ -270,7 +263,6 @@ async def upload_markdown_file(
     processing_status = "file_saved"
     
     if process_immediately:
-        # Create background processing job
         job_id = str(uuid.uuid4())
         processing_jobs[job_id] = {
             "job_id": job_id,
@@ -282,8 +274,6 @@ async def upload_markdown_file(
             "started_at": datetime.now().isoformat(),
             "completed_at": None
         }
-        
-        # Start background thread
         thread = threading.Thread(
             target=background_processing_worker,
             args=(job_id, file.filename),
@@ -293,8 +283,6 @@ async def upload_markdown_file(
         
         processing_status = "processing_queued"
         print(f"Started background processing job {job_id} for file {file.filename}")
-    
-    # Return immediately
     return UploadResponse(
         message="File uploaded successfully" + (" - processing started in background" if process_immediately else ""),
         filename=file.filename,

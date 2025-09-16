@@ -1,140 +1,50 @@
 # 🧠 Support Agent RAG System
 
-A **Knowledge Assistant** that helps support teams respond to customer tickets efficiently using a **Retrieval-Augmented Generation (RAG)** pipeline powered by **OpenAI's LLM** and following **Model Context Protocol (MCP)** standards.
+A **Knowledge Assistant** that helps support teams respond to customer tickets efficiently using a **Retrieval-Augmented Generation (RAG)** pipeline powered by **OpenAI’s LLM** and following **Model Context Protocol (MCP)** standards.
 
-## Overview
+---
+
+## 🚀 Overview
 
 This system analyzes customer support queries and returns structured, relevant, and helpful responses. It combines document retrieval with language model generation to provide support agents with:
 
-- **AI-generated responses** based on company documentation
-- **Relevant policy references** for accurate information
-- **Recommended actions** for proper ticket routing
-
-# Smart Auto-Update System
+- **AI-generated responses** based on company documentation  
+- **Relevant policy references** for accurate information  
+- **Recommended actions** for proper ticket routing  
 
 The RAG system automatically detects policy document changes and updates the knowledge base without manual intervention.
 
-## How It Works
+---
 
-### 🔍 **Automatic Detection**
-- Compares file modification timestamps between source and processed documents
-- Validates vector store consistency on startup
-- Triggers updates only when changes are detected
+## 🏗️ System Architecture
 
-## Sample Usage
+```mermaid
+graph TB
+    A[Client Upload] --> B[FastAPI Upload Endpoint]
+    B --> C[File Validation & Storage]
+    C --> D[Document Processing Pipeline]
+    D --> E[Chunking & Metadata Extraction]
+    E --> F[OpenAI Embedding Generation]
+    F --> G[Qdrant Vector Database]
+    G --> H[RAG Service]
+    H --> I[Support Ticket Resolution]
+    
+    J[User Query] --> H
+    H --> K[Vector Search]
+    K --> L[Context Retrieval]
+    L --> M[OpenAI Response Generation]
+    M --> N[Structured Response]
+```
 
-**Input:**
-{
-"ticket_text": "My domain was suspended and I didn't get any notice. How can I reactivate it?"
-}
+**Core Components:**
+- **Upload API** (`src/api/endpoint.py`) – File management endpoints  
+- **Document Processor** (`scripts/load_documents.py`) – Text processing and chunking  
+- **Vector Store** (`src/services/vector_store.py`) – Qdrant integration  
+- **Embedding Service** (`src/services/embedding_service.py`) – OpenAI embeddings  
+- **RAG Service** (`src/services/rag_service.py`) – Query processing pipeline  
+- **Ticket Resolver** (`src/api/endpoints.py`) – Support ticket endpoints  
 
-**Output (MCP-compliant):**
-{
-"answer": "I understand your concern about the domain suspension. Based on our documentation, domain suspensions typically occur due to incomplete WHOIS information or policy violations. To reactivate your domain, please update your WHOIS contact details through the control panel and contact our abuse team for manual review. The reactivation process usually takes 24-48 hours once all information is updated.",
-"references": [
-"Domain Management Policy v2.3 - Section 4.2: Suspension Process",
-"Domain Management Policy v2.3 - Section 4.3: Reactivation Requirements"
-],
-"action_required": "escalate_to_abuse_team"
-}
-
-## Architecture
-
-### RAG Pipeline Components
-
-1. **Document Processing** - Loads and chunks company policies/FAQs
-2. **Vector Store** - Qdrant database for semantic document search  
-3. **Embedding Service** - OpenAI text-embedding-ada-002 for vector generation
-4. **LLM Service** - GPT-3.5-turbo for intelligent response generation
-5. **RAG Orchestrator** - Coordinates retrieval and generation workflow
-
-### System Flow
-
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- **Python 3.8+**
-- **OpenAI API Key** 
-- **Qdrant Vector Database**
-
-### 1. Installation
-
-Clone the repository
-git clone [your-repo-url]
-cd support-agent
-
-### 2. Create .env file
-
-
-### 3. Start the server
-
-./start.sh
-
-### Interactive API Documentation
-Visit [**http://localhost:8000/docs#/**](http://localhost:8000/docs#/) for Swagger UI with interactive testing.
-
-
-## 🔧 Configuration
-
-### Model Configuration
-
-- **Embedding Model:** `text-embedding-ada-002` (1536 dimensions)
-- **LLM Model:** `gpt-3.5-turbo` (optimized for support responses)
-- **Vector Distance:** Cosine similarity
-- **Chunk Size:** 500 characters with 50 character overlap
-
-## API Endpoints
-
-### Main Endpoint
-
-**POST /resolve-ticket**
-- **Purpose:** Process support ticket and return AI-generated response
-- **Input:** `{ "ticket_text": "customer query..." }`
-- **Output:** MCP-compliant JSON with answer, references, and action
-
-### Support Endpoints
-
-**GET /health**
-- **Purpose:** Check system health and service status
-- **Output:** Service availability and system metrics
-
-**GET /**
-- **Purpose:** API information and usage instructions
-- **Output:** Endpoint documentation and examples
-
-## Key Features
-
-### RAG Pipeline
-- **Semantic Search:** Finds relevant documentation using vector similarity
-- **Context Assembly:** Combines multiple document chunks for comprehensive context
-- **Intelligent Generation:** Uses LLM to create helpful, accurate responses
-
-### Response Quality
-- **Professional Tone:** Empathetic and helpful customer service language
-- **Structured Answers:** Clear steps and actionable guidance
-- **Source References:** Citations from company documentation
-- **Smart Routing:** Recommends appropriate team escalation
-
-### Production Ready
-- **Error Handling:** Graceful degradation and informative error messages
-- **Performance Monitoring:** Request timing and usage statistics
-- **Scalable Architecture:** Async processing and connection pooling
-- **API Documentation:** Auto-generated OpenAPI/Swagger docs
-
-## Performance
-
-### Response Times
-- **Average:** 2-4 seconds per ticket
-- **Document Retrieval:** 200-500ms  
-- **LLM Generation:** 1-3 seconds
-
-### Scalability
-- **Concurrent Requests:** 50+ (with proper async handling)
-- **Document Capacity:** 10,000+ chunks
-- **Storage:** ~100MB for typical document set
-
+---
 ## Technical Decisions
 
 ### Why GPT-3.5-turbo?
@@ -151,23 +61,100 @@ Visit [**http://localhost:8000/docs#/**](http://localhost:8000/docs#/) for Swagg
 - **Dynamic knowledge** updates without retraining
 - **Transparent citations** for support agent confidence
 - **Cost-effective** for evolving documentation
+ 
+---
+## 🔧 Installation & Setup
 
-## Requirements Fulfilled
+```bash
+# Clone the repository
+git clone https://github.com/arshita1625/support-agent.git
+cd support-agent
 
-**RAG Pipeline** - Document embedding and retrieval with vector database  
-**LLM Integration** - GPT-3.5-turbo with contextual prompt engineering  
-**MCP Compliance** - Structured JSON output with defined schema  
-**API Endpoint** - Single `POST /resolve-ticket` endpoint as specified  
-**Code Quality** - Modular, documented, and maintainable architecture  
+# Copy environment variables from .env file
+
+# Start all services (Qdrant + App)
+docker compose up --build
+
+# View logs
+docker compose logs -f
+
+# Stop all services
+docker compose down
+```
+
+The application will be available at:  
+- **Main API:** http://localhost:8000  
+- **Swagger Docs:** http://localhost:8000/docs  
+
+---
+
+## 📋 API Endpoints
+
+### 📤 File Upload API
+
+**Upload Document**  
+```bash
+curl -X POST
+  "http://localhost:8000/api/upload/"
+  -H "accept: application/json" 
+  -H "Content-Type: multipart/form-data"
+  -F "file=sample.md"
+  -F "process_immediately=true"
+```
+
+### 📁 File Management API
+
+**List All Files**  
+```bash
+curl -X GET "http://localhost:8000/api/upload/files" -H "accept: application/json"
+```
+
+**Delete File**  
+```bash
+curl -X DELETE "http://localhost:8000/api/upload/files/{filename}"      -H "accept: application/json"
+```
+
+### 🎯 Support Ticket Resolution API
+
+**Resolve Support Ticket**  
+```bash
+curl -X POST "http://localhost:8000/resolve-ticket"      -H "Content-Type: application/json"      -d '{
+       "ticket_text": "My domain was suspended yesterday and I need to reactivate it urgently. What steps should I take?"
+     }'
+```
+
+### 🔍 System Health API
+
+**Check Health**  
+```bash
+curl -X GET "http://localhost:8000/health"
+```
+
+---
+
+## Running Tests
+
+### 1. Activate Python environment
+```bash
+python3 -m venv .venv
+source venv/bin/activate 
+```
+
+### 2. Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Run test suite
+```bash
+pytest
+```
+
+---
 
 ## 👤 Author
 
 **Arshita**  
 *AI Engineer Candidate*  
-*aarshita@uwaterloo.ca*
-*[https://www.linkedin.com/in/arshita01625/]*
-*[https://portfolio-i242.onrender.com/]*
----
-
-*Built for Tucows AI Engineer Interview - Demonstrates production-ready RAG system design and implementation.*
-
+📧 aarshita@uwaterloo.ca  
+🔗 [LinkedIn](https://www.linkedin.com/in/arshita01625/) | [Portfolio](https://portfolio-i242.onrender.com/)  

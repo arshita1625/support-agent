@@ -470,7 +470,6 @@ class DocumentLoader:
     def _extract_chunk_focus(self, content: str) -> str:
         content_lower = content.lower()
         focus_mapping = {
-            #
             "domain_suspension": ["domain suspend", "site suspend", "website suspend"],
             "account_suspension": ["account suspend", "user suspend", "login suspend"],
             "billing_dispute": ["billing dispute", "charge dispute", "payment dispute"],
@@ -557,20 +556,10 @@ class DocumentLoader:
         if documents:
             for doc in documents:
                 print(f"   • {doc.title} ({doc.document_type})")
-                print(f"     File: {doc.metadata['filename']}")
-                print(f"     Size: {doc.metadata['file_size']} chars")
-                print(f"     Tags: {doc.metadata.get('tags', [])}")
         if chunks:
             chunk_sizes = [len(chunk.content) for chunk in chunks]
-            avg_chunk_size = sum(chunk_sizes) / len(chunk_sizes)
-
-            print(f"\n📦 Chunk Statistics:")
-            print(f"   Average chunk size: {avg_chunk_size:.0f} characters")
-            print(f"   Min chunk size: {min(chunk_sizes)}")
-            print(f"   Max chunk size: {max(chunk_sizes)}")
         
 def main():
-    """Main function to load documents."""
 
     print("🚀 Loading Support Documents...\n")
 
@@ -581,7 +570,7 @@ def main():
     documents, chunks = loader.load_all_documents()
 
     if not documents:
-        print("❌ No documents found!")
+        print(" No documents found!")
         print("Make sure you have .md files in data/documents/")
         return False
 
