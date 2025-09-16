@@ -32,7 +32,8 @@ class VectorStoreService:
     
     def __init__(
         self,
-        host: str = "localhost",
+        # host: str = "localhost",
+        host: str = "qdrant",
         port: int = 6333,
         collection_name: str = "support_documents",
         vector_size: int = 1536,  # OpenAI text-embedding-ada-002 size

@@ -226,7 +226,7 @@ class MCPResponse:
                 "Domain Management Policy v2.3 - Section 4.4: Appeals Process"
             ])
         
-        if any(term in answer_lower for term in ['reactivate', 'restore', 'unsuspend', '24-48 hours']):
+        if any(term in answer_lower for term in ['reactivate', 'restore', 'unsuspend', '24-48 hours','recovery']):
             references.extend([
                 "Domain Management Policy v2.3 - Section 4.3: Reactivation Requirements",
                 "Backup Schedule v2.3 - Section 11",
