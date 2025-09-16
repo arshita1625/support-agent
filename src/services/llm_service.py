@@ -77,7 +77,17 @@ class LLMService:
         }
         
         logger.info(f"LLM service initialized with model: {model}")
-    
+    def _normalize_content(self, content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        elif isinstance(content, list):
+            # join text parts (OpenAI can return [{"type": "text", "text": "..."}])
+            return " ".join(
+                part.get("text", "") if isinstance(part, dict) else str(part)
+                for part in content
+            )
+        else:
+            return str(content)
     def get_model_info(self) -> Dict[str, Any]:
         return {
             "model": self.model,
@@ -88,87 +98,108 @@ class LLMService:
         }
     
     def _build_system_prompt(self, ticket: SupportTicket) -> str:
-        
-        base_prompt = """You are an expert customer support agent for a domain registration and web hosting company. Your role is to provide helpful, accurate, and professional responses to customer inquiries. Provide SHORT, DIRECT responses.
-RULES:
-- Keep responses under 3 sentences when possible
-- Give the most important information first
-- Be specific and actionable
-- Don't repeat the customer's problem back to them
-SCOPE: Only answer questions related to:
-- Domain management (registration, transfers, suspension, WHOIS)
-- Website hosting and technical issues
-- Email hosting and configuration
-- Billing and payments
-- DNS and SSL certificates
-- Company policies and procedures
+        role_text = (
+            "ROLE: You are an expert customer support agent for a domain registration "
+            "and web hosting company."
+        )
+        context_text = (
+            "CONTEXT: You must provide helpful, accurate, and professional responses.\n"
+            "Guidelines:\n"
+            "- Keep responses under 3 sentences when possible\n"
+            "- Provide the most important information first\n"
+            "- Be specific and actionable\n"
+            "- Do not repeat the customer's problem back\n"
+            "- Only answer questions related to: Domain management, Website hosting, "
+            "Email hosting, Billing, DNS/SSL, Company policies\n"
+            "- If the question is out of scope, respond with: "
+            "'I apologize, but I can only assist with domain and hosting related questions. "
+            "Please contact our customer support team directly for other inquiries.'\n"
+            "- Always remain professional, empathetic, and concise\n"
+            "- When uncertain, suggest contacting the appropriate team."
+        )
 
-OUT-OF-SCOPE HANDLING:
-If the question is NOT related to domain/hosting services (e.g., job applications, general tech advice, personal matters), respond with:
-"I apologize, but I can only assist with domain and hosting related questions. Please contact our customer support team directly for other inquiries."
-Key guidelines:
-1. Be helpful, empathetic, and professional
-2. Provide specific, actionable guidance
-3. Reference company policies when relevant
-4. Suggest appropriate next actions
-5. Be concise but comprehensive
-6. If uncertain, recommend contacting the appropriate team
-
-You have access to company documentation and should base your responses on the provided context."""
-        
-        keywords = ticket.extract_keywords()
-        
-        if 'domain' in keywords or 'suspension' in keywords:
-            base_prompt += "\n\nThis inquiry is domain-related. Focus on domain management, suspension issues, WHOIS compliance, and reactivation procedures."
-        
-        if 'billing' in keywords:
-            base_prompt += "\n\nThis inquiry is billing-related. Focus on payment issues, refunds, account problems, and billing procedures."
-        
-        if 'technical' in keywords:
-            base_prompt += "\n\nThis inquiry is technical. Focus on DNS, email, SSL, server issues, and technical troubleshooting."
-    
         if ticket.priority in ["high", "urgent"]:
-            base_prompt += "\n\nThis is a high-priority inquiry. Be extra attentive and suggest immediate action steps."
-        
-        return base_prompt
-    
+            context_text += (
+                "\n\n!! URGENCY: This is a HIGH PRIORITY issue. "
+                "Respond with extra clarity and provide immediate, actionable next steps."
+            )
+        elif ticket.priority == "medium":
+            context_text += (
+                "\n\n!! URGENCY: This is a MEDIUM PRIORITY issue. "
+                "Ensure clear instructions and suggest timely actions."
+            )
+        elif ticket.priority == "low":
+            context_text += (
+                "\n\n!! URGENCY: This is a LOW PRIORITY issue. "
+                "Respond normally and professionally."
+            )
+
+        keywords = ticket.extract_keywords()
+        if 'domain' in keywords or 'suspension' in keywords:
+            context_text += (
+                "\n\nKeyword context: Focus on domain management, suspension issues, "
+                "WHOIS compliance, and reactivation procedures."
+            )
+        if 'billing' in keywords:
+            context_text += (
+                "\n\nKeyword context: Focus on billing, payment issues, refunds, "
+                "and account procedures."
+            )
+        if 'technical' in keywords:
+            context_text += (
+                "\n\nKeyword context: Focus on DNS, email, SSL, server issues, "
+                "and troubleshooting."
+            )
+
+        task_text = (
+            "TASK: Respond to the user's query based on the above rules and scope. "
+            "Ensure compliance with in-scope/out-of-scope handling."
+        )
+        schema_text = (
+            "OUTPUT SCHEMA (JSON):\n"
+           "The response you would give to the customer (under 3 sentences when possible)."
+        )
+
+        return f"{role_text}\n\n{context_text}\n\n{task_text}\n\n{schema_text}"
+
     def _build_user_prompt(self, ticket: SupportTicket, rag_context: RAGContext) -> str:
-        
-        prompt_parts = [
-            "Please help with this customer support inquiry:",
-            f"\nCustomer Query: {ticket.ticket_text}",
-            f"\nPriority: {ticket.priority.title()}"
-        ]
-        
+        query_text = f"CUSTOMER QUERY: {ticket.ticket_text}"
+
+        metadata_parts = [f"Priority: {ticket.priority.title()}"]
         if ticket.customer_id:
-            prompt_parts.append(f"Customer Id: {ticket.customer_id}")
-        
+            metadata_parts.append(f"Customer ID: {ticket.customer_id}")
+
         keywords = ticket.extract_keywords()
         if keywords:
-            prompt_parts.append(f"Detected Topics: {', '.join(keywords)}")
-        
+            metadata_parts.append(f"Detected Topics: {', '.join(keywords)}")
+
+        metadata_text = "METADATA:\n" + "\n".join(metadata_parts)
+
         if rag_context.retrieved_documents:
-            prompt_parts.append(f"\nRelevant Documentation (Average Relevance: {rag_context.average_similarity:.3f}):")
-            
+            docs_text = ["RELEVANT DOCUMENTATION (average relevance "
+                        f"{rag_context.average_similarity:.3f}):"]
+
             for i, doc in enumerate(rag_context.retrieved_documents[:3], 1):
-                prompt_parts.append(
-                    f"\n[Document {i} - {doc.document_type.title()} - Relevance: {doc.similarity_score:.3f}]"
+                docs_text.append(
+                    f"[Doc {i} - {doc.document_type.title()} - "
+                    f"Relevance {doc.similarity_score:.3f}] {doc.content}"
                 )
-                prompt_parts.append(doc.content)
+
+            documentation_text = "\n".join(docs_text)
         else:
-            prompt_parts.append("\nNo specific documentation was found for this query.")
-        
-        prompt_parts.append(
-            "\nPlease provide a helpful response that includes:"
-            "\n1. A clear, empathetic answer to the customer's question"
-            "\n2. Specific steps they should take (if applicable)"
-            "\n3. Any relevant policies or procedures"
-            "\n4. Estimated timeframes when possible"
-            "\n5. Contact information for further assistance if needed"
+            documentation_text = "No specific documentation was retrieved for this query."
+
+        instructions_text = (
+            "INSTRUCTIONS:\n"
+            "1. Provide a clear, empathetic answer to the customer's question.\n"
+            "2. Suggest specific steps the customer should take (if applicable).\n"
+            "3. Mention relevant policies or procedures.\n"
+            "4. Include estimated timeframes when possible.\n"
+            "5. Provide contact information for further assistance if needed."
         )
-        
-        return "\n".join(prompt_parts)
-    
+
+        return f"{query_text}\n\n{metadata_text}\n\n{documentation_text}\n\n{instructions_text}"
+
     def _determine_action_required(self, response_text: str, ticket: SupportTicket, rag_context: RAGContext) -> str: 
         response_lower = response_text.lower()
         keywords = ticket.extract_keywords()
@@ -242,7 +273,9 @@ You have access to company documentation and should base your responses on the p
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ]
+            
         
+            # estimated_tokens = sum(len(self._normalize_content(msg["content"]).split()) * 1.3 for msg in messages)
             estimated_tokens = sum(len(msg["content"].split()) * 1.3 for msg in messages)
             context_limit = self.model_specs.get(self.model, {}).get("context_window", 4096)
         
@@ -264,21 +297,14 @@ You have access to company documentation and should base your responses on the p
             if completion.usage:
                 self.usage_stats["total_input_tokens"] += completion.usage.prompt_tokens
                 self.usage_stats["total_output_tokens"] += completion.usage.completion_tokens
-                
-
-                
                 model_spec = self.model_specs.get(self.model, {})
                 input_cost = (completion.usage.prompt_tokens / 1000) * model_spec.get("cost_per_1k_input_tokens", 0)
                 output_cost = (completion.usage.completion_tokens / 1000) * model_spec.get("cost_per_1k_output_tokens", 0)
                 self.usage_stats["total_cost"] += input_cost + output_cost
             
             self.usage_stats["successful_requests"] += 1
-        
             action_required = self._determine_action_required(response_text, ticket, rag_context)
-        
             base_confidence = min(rag_context.average_similarity + 0.2, 1.0)
-            
-
             
             if len(response_text) < 50:
 
@@ -307,8 +333,6 @@ You have access to company documentation and should base your responses on the p
                 "output_tokens": completion.usage.completion_tokens if completion.usage else None,
                 "generation_time_ms": round((time.time() - start_time) * 1000, 2)
             }
-            
-
             
             response_time = time.time() - start_time
             if self.usage_stats["successful_requests"] == 1:
@@ -341,7 +365,7 @@ You have access to company documentation and should base your responses on the p
             error_response.escalation_reason = f"LLM generation error: {str(e)}"
             
             return error_response
-    
+
     async def get_usage_stats(self) -> Dict[str, Any]:
         
         stats = self.usage_stats.copy()

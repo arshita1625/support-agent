@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
-"""Support Agent RAG System API."""
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import sys
 from pathlib import Path
-
-# Add src to path for imports
+from src.api.upload_files import router as upload_router
 sys.path.append(str(Path(__file__).parent / "src"))
 
 from src.api.endpoint import router
 
-# Create FastAPI app
 app = FastAPI(
     title="Support Agent RAG System",
     description="AI-powered knowledge assistant for support tickets",
     version="1.0.0"
 )
-
-# Add CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,19 +21,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include router
 app.include_router(router)
+app.include_router(upload_router, prefix="/api/upload", tags=["File Upload"])
 rag_service = None
 @app.on_event("startup")
 async def startup_event():
-    """Initialize services and check for document updates."""
-    print("🚀 Support Agent RAG System starting...")
-    print("📚 Initializing RAG services...")
+    print(" Support Agent RAG System starting...")
     
     try:
         from src.services.rag_service import RAGService
-        
-        # Create RAG service (this will be reused by endpoints)
+        # Create RAG service
         global rag_service
         rag_service = RAGService()
         
@@ -49,14 +40,13 @@ async def startup_event():
         if updated:
             print(" Policy check completed")
         else:
-            print("⚠️ Policy update had issues, but system is operational")
+            print("Policy update had issues, but system is operational")
             
     except Exception as e:
-        print(f"⚠️ Startup checks failed: {e}")
-        print("🔄 System starting anyway with existing data...")
+        print("System starting anyway with existing data...")
     
-    print("🔗 API available at: http://localhost:8000")
-    print("📖 API docs at: http://localhost:8000/docs")
+    print("API available at: http://localhost:8000")
+    print("API docs at: http://localhost:8000/docs")
 @app.get("/")
 async def root():
     """API information."""

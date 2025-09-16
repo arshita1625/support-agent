@@ -3,3 +3,4 @@ venv
 .python-version
 .coverage
 .pytest_cache
+__pycache__

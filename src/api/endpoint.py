@@ -32,16 +32,12 @@ router = APIRouter()
 
 @router.post("/resolve-ticket", response_model=TicketResponse)
 async def resolve_ticket(request: TicketRequest):
-    """Resolve support ticket using RAG pipeline."""
     
     try:
         import main
         if main.rag_service is None:
-            logger.info("🔄 Initializing RAG service (not done at startup)")
             from services.rag_service import RAGService
             main.rag_service = RAGService()
-            
-            # Check for document updates since startup missed it
             try:
                 await main.rag_service.ensure_documents_current_on_startup()
             except Exception as e:
