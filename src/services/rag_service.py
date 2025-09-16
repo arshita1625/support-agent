@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""RAG service for orchestrating query processing, retrieval, and response generation."""
 import os
 import asyncio
 import logging
@@ -22,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RAGService:
-    """Main RAG service for processing support tickets and generating responses."""
+    
     
     def __init__(
         self,
@@ -32,17 +31,6 @@ class RAGService:
         min_similarity_threshold: float = 0.3,
         high_confidence_threshold: float = 0.8
     ):
-        """Initialize RAG service.
-        
-        Args:
-            document_processor: Document processing service
-            llm_service: LLM service for response generation
-            default_retrieval_limit: Default number of documents to retrieve
-            min_similarity_threshold: Minimum similarity for relevant documents
-            high_confidence_threshold: Threshold for high confidence responses
-        """
-        
-        # Initialize services
         self.document_processor = document_processor or DocumentProcessorService()
         self.llm_service = llm_service or LLMService()
         self._startup_check_done = False
@@ -53,34 +41,29 @@ class RAGService:
         
         logger.info("RAG service initialized----->")
     async def ensure_documents_current_on_startup(self) -> bool:
-        """Ensure documents are current when system starts up."""
         
         if self._startup_check_done:
             return True
-        
-        logger.info("🔍 Checking for policy updates on startup...")
         
         try:
             result = await self.document_processor.auto_update_documents_if_needed()
             
             if result["success"]:
                 if result.get("updated", False):
-                    logger.info(f"🔄 Documents updated: {result.get('chunks_indexed', 0)} chunks indexed")
-                    logger.info(f"💰 Update cost: ${result.get('cost', 0):.4f}")
+                    logger.info(f"Documents updated: {result.get('chunks_indexed', 0)} chunks indexed")
                 else:
-                    logger.info("✅ Documents already current")
+                    logger.info("Documents already current")
                 
                 self._startup_check_done = True
                 return True
             else:
-                logger.error(f"❌ Document update failed: {result.get('error', 'Unknown error')}")
+                logger.error(f"Document update failed: {result.get('error', 'Unknown error')}")
                 logger.info("🔄 Continuing with existing documents...")
                 self._startup_check_done = True
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Startup document check failed: {e}")
-            logger.info("🔄 Continuing with existing documents...")
+            logger.error(f"Startup document check failed: {e}")
             self._startup_check_done = True
             return False
     
@@ -90,17 +73,6 @@ class RAGService:
         retrieval_limit: Optional[int] = None,
         custom_instructions: Optional[str] = None
     ) -> MCPResponse:
-        """Process a support ticket and generate a complete response.
-        
-        Args:
-            ticket: SupportTicket object with customer query
-            retrieval_limit: Number of documents to retrieve (uses default if None)
-            custom_instructions: Additional instructions for LLM
-            
-        Returns:
-            MCPResponse with generated answer and metadata
-        """
-        
         start_time = time.time()
         logger.info(f"🎫 Processing support ticket: {ticket.ticket_id}")
         
@@ -119,15 +91,15 @@ class RAGService:
                 score_threshold=self.min_similarity_threshold
             )
             
-            logger.info(f"📊 Retrieved {len(rag_context.retrieved_documents)} documents")
-            logger.info(f"📈 Average similarity: {rag_context.average_similarity:.3f}")
+            logger.info(f"Retrieved {len(rag_context.retrieved_documents)} documents")
+            logger.info(f"Average similarity: {rag_context.average_similarity:.3f}")
             
             # 3. Assess retrieval quality
             retrieval_quality = self._assess_retrieval_quality(rag_context)
             logger.info(f"📋 Retrieval quality: {retrieval_quality['quality_level']}")
             
             # 4. Generate response using LLM
-            logger.info("🤖 Generating LLM response...")
+            logger.info("Generating LLM response...")
             
             response = await self.llm_service.generate_support_response(
                 ticket=ticket,
@@ -140,15 +112,15 @@ class RAGService:
             
             # 6. Log processing results
             processing_time = time.time() - start_time
-            logger.info(f"✅ Ticket processed in {processing_time:.2f}s")
-            logger.info(f"🎯 Response action: {response.action_required}")
-            logger.info(f"📊 Confidence: {response.confidence_score:.3f}")
+            logger.info(f"Ticket processed in {processing_time:.2f}s")
+            logger.info(f"Response action: {response.action_required}")
+            logger.info(f"Confidence: {response.confidence_score:.3f}")
             
             return response
             
         except Exception as e:
             # Generate error response
-            logger.error(f"❌ Failed to process ticket {ticket.ticket_id}: {e}")
+            logger.error(f"Failed to process ticket {ticket.ticket_id}: {e}")
             
             error_response = MCPResponse(
                 answer=f"I apologize, but I encountered an error while processing your request: {str(e)}. Please contact our support team directly for immediate assistance.",
@@ -162,8 +134,7 @@ class RAGService:
             return error_response
     
     def _assess_retrieval_quality(self, rag_context: RAGContext) -> Dict[str, Any]:
-        """Assess the quality of document retrieval for response confidence."""
-        
+      
         if not rag_context.retrieved_documents:
             return {
                 "quality_level": "poor",
@@ -278,17 +249,6 @@ class RAGService:
         tickets: List[SupportTicket],
         max_concurrent: int = 3
     ) -> List[MCPResponse]:
-        """Process multiple support tickets concurrently.
-        
-        Args:
-            tickets: List of support tickets to process
-            max_concurrent: Maximum number of concurrent processing tasks
-            
-        Returns:
-            List of MCPResponse objects in the same order
-        """
-        
-        logger.info(f"📦 Processing batch of {len(tickets)} tickets (max concurrent: {max_concurrent})")
         
         # Create semaphore to limit concurrent processing
         semaphore = asyncio.Semaphore(max_concurrent)
@@ -319,18 +279,14 @@ class RAGService:
                 final_responses.append(response)
         
         processing_time = time.time() - start_time
-        logger.info(f"📦 Batch processing completed in {processing_time:.2f}s")
         
         return final_responses
     
     async def get_rag_analytics(self) -> Dict[str, Any]:
-        """Get analytics about RAG service performance and usage."""
         
         try:
             # Get document processor status
             processor_status = self.document_processor.get_processing_status()
-            
-            # Get LLM service stats (if available)
             llm_stats = {}
             if hasattr(self.llm_service, 'get_usage_stats'):
                 llm_stats = await self.llm_service.get_usage_stats()
@@ -363,14 +319,6 @@ class RAGService:
             }
     
     async def test_rag_pipeline(self, test_queries: Optional[List[str]] = None) -> Dict[str, Any]:
-        """Test the complete RAG pipeline with sample queries.
-        
-        Args:
-            test_queries: List of test queries (uses defaults if None)
-            
-        Returns:
-            Test results and performance metrics
-        """
         
         if test_queries is None:
             test_queries = [
@@ -380,8 +328,6 @@ class RAGService:
                 "I need to transfer my domain to another registrar",
                 "My website is loading slowly"
             ]
-        
-        logger.info(f"🧪 Testing RAG pipeline with {len(test_queries)} queries")
         
         test_results = {
             "total_queries": len(test_queries),
@@ -425,7 +371,7 @@ class RAGService:
                 total_processing_time += processing_time
                 total_confidence += (response.confidence_score or 0.0)
                 
-                logger.info(f"✅ Success - Action: {response.action_required}, Confidence: {response.confidence_score:.3f}")
+                logger.info(f"SUCCESS - Action: {response.action_required}, Confidence: {response.confidence_score:.3f}")
                 
             except Exception as e:
                 result = {
@@ -437,11 +383,9 @@ class RAGService:
                 }
                 
                 test_results["failed_responses"] += 1
-                logger.error(f"❌ Failed: {e}")
             
             test_results["query_results"].append(result)
         
-        # Calculate averages
         if test_results["successful_responses"] > 0:
             test_results["average_processing_time_ms"] = round(
                 total_processing_time / test_results["successful_responses"], 2
@@ -456,66 +400,66 @@ class RAGService:
         return test_results
 
 
-# Test the RAG service if run directly
-if __name__ == "__main__":
-    print("🧪 Testing RAG Service...")
-    print("=" * 50)
-    if not os.getenv('OPENAI_API_KEY'):
-        print("❌ OPENAI_API_KEY environment variable not set!")
-        print("Please set it with: export OPENAI_API_KEY='your-api-key'")
-        exit(1)
+# # Test the RAG service if run directly
+# if __name__ == "__main__":
+#     print("🧪 Testing RAG Service...")
+#     print("=" * 50)
+#     if not os.getenv('OPENAI_API_KEY'):
+#         print("❌ OPENAI_API_KEY environment variable not set!")
+#         print("Please set it with: export OPENAI_API_KEY='your-api-key'")
+#         exit(1)
     
-    async def run_tests():
-        # Initialize RAG service
-        print("\n🧠 Initializing RAG Service")
-        rag_service = RAGService()
-        # Test single ticket processing
-        print("\n🎫 Testing Single Ticket Processing")
-        test_ticket = SupportTicket(
-            ticket_text="My domain was suspended and I didn't receive any notification. How can I reactivate it?",
-            priority="high",
-            customer_id="customer_123"
-        )
+#     async def run_tests():
+#         # Initialize RAG service
+#         print("\n🧠 Initializing RAG Service")
+#         rag_service = RAGService()
+#         # Test single ticket processing
+#         print("\n🎫 Testing Single Ticket Processing")
+#         test_ticket = SupportTicket(
+#             ticket_text="My domain was suspended and I didn't receive any notification. How can I reactivate it?",
+#             priority="high",
+#             customer_id="customer_123"
+#         )
         
-        try:
-            response = await rag_service.process_support_ticket(test_ticket)
-            print(f"   ✅ Response generated:")
-            print(f"      Action: {response.action_required}")
-            print(f"      Confidence: {response.confidence_score:.3f}")
-            print(f"      Answer length: {len(response.answer)} chars")
-            print(f"      References: {len(response.references)}")
-            print(f"      Answer preview: {response.answer[:150]}...")
-        except Exception as e:
-            print(f"   ❌ Single ticket processing failed: {e}")
-            return
+#         try:
+#             response = await rag_service.process_support_ticket(test_ticket)
+#             print(f"   ✅ Response generated:")
+#             print(f"      Action: {response.action_required}")
+#             print(f"      Confidence: {response.confidence_score:.3f}")
+#             print(f"      Answer length: {len(response.answer)} chars")
+#             print(f"      References: {len(response.references)}")
+#             print(f"      Answer preview: {response.answer[:150]}...")
+#         except Exception as e:
+#             print(f"   ❌ Single ticket processing failed: {e}")
+#             return
         
-        # Test pipeline with multiple queries
-        print("\n🧪 Testing Complete RAG Pipeline")
-        try:
-            pipeline_results = await rag_service.test_rag_pipeline()
-            print(f"   ✅ Pipeline test results:")
-            print(f"      Success rate: {(pipeline_results['successful_responses']/pipeline_results['total_queries']*100):.1f}%")
-            print(f"      Average processing time: {pipeline_results['average_processing_time_ms']:.1f}ms")
-            print(f"      Average confidence: {pipeline_results['average_confidence']:.3f}")
-        except Exception as e:
-            print(f"   ❌ Pipeline test failed: {e}")
+#         # Test pipeline with multiple queries
+#         print("\n🧪 Testing Complete RAG Pipeline")
+#         try:
+#             pipeline_results = await rag_service.test_rag_pipeline()
+#             print(f"   ✅ Pipeline test results:")
+#             print(f"      Success rate: {(pipeline_results['successful_responses']/pipeline_results['total_queries']*100):.1f}%")
+#             print(f"      Average processing time: {pipeline_results['average_processing_time_ms']:.1f}ms")
+#             print(f"      Average confidence: {pipeline_results['average_confidence']:.3f}")
+#         except Exception as e:
+#             print(f"   ❌ Pipeline test failed: {e}")
         
-        # Get analytics
-        print("\n📊 Testing Analytics")
-        try:
-            analytics = await rag_service.get_rag_analytics()
-            print(f"   ✅ Analytics retrieved:")
-            print(f"      Service status: {analytics.get('service_status', 'unknown')}")
-            print(f"      Indexed documents: {analytics.get('document_index', {}).get('total_documents', 0)}")
-            print(f"      Embedding model: {analytics.get('configuration', {}).get('embedding_model', 'unknown')}")
-        except Exception as e:
-            print(f"   ❌ Analytics failed: {e}")
+#         # Get analytics
+#         print("\n📊 Testing Analytics")
+#         try:
+#             analytics = await rag_service.get_rag_analytics()
+#             print(f"   ✅ Analytics retrieved:")
+#             print(f"      Service status: {analytics.get('service_status', 'unknown')}")
+#             print(f"      Indexed documents: {analytics.get('document_index', {}).get('total_documents', 0)}")
+#             print(f"      Embedding model: {analytics.get('configuration', {}).get('embedding_model', 'unknown')}")
+#         except Exception as e:
+#             print(f"   ❌ Analytics failed: {e}")
         
-        print("\n🎉 RAG Service testing completed!")
-        print("\n💡 Next steps:")
-        print("   1. Your RAG system is now fully functional")
-        print("   2. Create API endpoints to expose the RAG service")
-        print("   3. Build a frontend interface for testing")
+#         print("\n🎉 RAG Service testing completed!")
+#         print("\n💡 Next steps:")
+#         print("   1. Your RAG system is now fully functional")
+#         print("   2. Create API endpoints to expose the RAG service")
+#         print("   3. Build a frontend interface for testing")
     
-    # Run async tests
-    asyncio.run(run_tests())
+#     # Run async tests
+#     asyncio.run(run_tests())

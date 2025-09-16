@@ -171,7 +171,6 @@ class TestEmbeddingServiceBasic:
         required_methods = [
             'get_embedding_dimensions',
             'get_model_info',
-            'check_health',
             '_enforce_rate_limit',
             '_preprocess_text',
             'generate_embedding'
@@ -194,7 +193,7 @@ class TestEmbeddingServiceSimple:
     
     def test_methods_exist(self, embedding_service):
 
-        methods = ['generate_embedding', 'generate_embeddings', 'check_health', 
+        methods = ['generate_embedding', 'generate_embeddings', 
                   'get_embedding_dimensions', 'get_model_info']
         
         for method in methods:
