@@ -314,6 +314,7 @@ class DocumentLoader:
         print(f" Chunking document: {len(content)} characters")
         
         if '##' in content:
+            print("🔍 Found markdown sections, splitting by headers...")
             import re
             section_pattern = r'^##\s+(.+)$'
             sections = []
@@ -560,4 +561,40 @@ class DocumentLoader:
                 print(f"     File: {doc.metadata['filename']}")
                 print(f"     Size: {doc.metadata['file_size']} chars")
                 print(f"     Tags: {doc.metadata.get('tags', [])}")
+        if chunks:
+            chunk_sizes = [len(chunk.content) for chunk in chunks]
+            avg_chunk_size = sum(chunk_sizes) / len(chunk_sizes)
+
+            print(f"\n📦 Chunk Statistics:")
+            print(f"   Average chunk size: {avg_chunk_size:.0f} characters")
+            print(f"   Min chunk size: {min(chunk_sizes)}")
+            print(f"   Max chunk size: {max(chunk_sizes)}")
         
+def main():
+    """Main function to load documents."""
+
+    print("🚀 Loading Support Documents...\n")
+
+    # Initialize loader
+    loader = DocumentLoader()
+
+    # Load all documents
+    documents, chunks = loader.load_all_documents()
+
+    if not documents:
+        print("❌ No documents found!")
+        print("Make sure you have .md files in data/documents/")
+        return False
+
+    # Save processed documents
+    loader.save_processed_documents(documents, chunks)
+
+    # Print summary
+    loader.print_summary(documents, chunks)
+
+    print("\n🎉 Document loading completed successfully!")
+    return True
+
+if __name__ == "__main__":
+    success = main()
+    sys.exit(0 if success else 1)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Any, Optional, List
 from datetime import datetime
