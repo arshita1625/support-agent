@@ -31,8 +31,8 @@ class VectorStoreService:
     
     def __init__(
         self,
-        host: str = "localhost",
-        # host: str = "qdrant",
+        # host: str = "localhost",
+        host: str = "qdrant",
         port: int = 6333,
         collection_name: str = "support_documents",
         vector_size: int = 1536, 
