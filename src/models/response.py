@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 import json
 import re
+
 @dataclass
 class MCPResponse:
     answer: str
@@ -33,6 +34,7 @@ class MCPResponse:
     contact_information: Dict[str, str] = field(default_factory=dict)
     escalation_reason: Optional[str] = None
     additional_context: Dict[str, Any] = field(default_factory=dict)
+    retrieved_chunks: List[Dict] = field(default_factory=list)  # New field for chunk metadata
     
     def __post_init__(self):
         self._validate_answer()
@@ -78,6 +80,7 @@ class MCPResponse:
         
         if self.action_required not in valid_actions:
             raise ValueError(f'action_required must be one of: {valid_actions}')
+    
     def _validate_references(self):
         if not isinstance(self.references, list):
             raise ValueError('references must be a list')
@@ -114,32 +117,39 @@ class MCPResponse:
         
         # Extract time estimates if not explicitly provided
         if not self.estimated_resolution_time:
-            time_patterns = [
-                r'(\d+)-(\d+)\s+(hours?|days?|weeks?)',
-                r'(\d+)\s+(hours?|days?|weeks?|minutes?)',
-                r'(immediately|right away|asap)',
-                r'(\d+)\s+(business\s+days?)'
-            ]
-            
-            for pattern in time_patterns:
-                match = re.search(pattern, answer_lower)
-                if match:
-                    if isinstance(match.groups(), tuple) and len(match.groups()) > 1:
-                        self.estimated_resolution_time = ' '.join(match.groups())
-                    else:
-                        self.estimated_resolution_time = match.group(0)
-                    break
+            # Simple string searches instead of complex regex
+            if 'immediately' in answer_lower or 'right away' in answer_lower:
+                self.estimated_resolution_time = 'immediately'
+            elif 'hours' in answer_lower:
+                # Find number before 'hours'
+                words = answer_lower.split()
+                for i, word in enumerate(words):
+                    if 'hour' in word and i > 0:
+                        prev_word = words[i-1]
+                        if prev_word.isdigit():
+                            self.estimated_resolution_time = f"{prev_word} hours"
+                            break
+            elif 'days' in answer_lower:
+                # Find number before 'days'  
+                words = answer_lower.split()
+                for i, word in enumerate(words):
+                    if 'day' in word and i > 0:
+                        prev_word = words[i-1]
+                        if prev_word.isdigit():
+                            self.estimated_resolution_time = f"{prev_word} days"
+                            break
         
-        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-        emails = re.findall(email_pattern, self.answer)
-        phone_pattern = r'(\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})'
-        phones = re.findall(phone_pattern, self.answer)
+        # Simple email detection - no regex
+        words = self.answer.split()
+        emails = []
+        for word in words:
+            if '@' in word and '.' in word:
+                emails.append(word.strip('.,;:'))
         
         if emails:
             self.contact_information['emails'] = emails
-        if phones:
-            self.contact_information['phones'] = [''.join(phone) for phone in phones]
-    
+        
+        # Simple follow-up detection
         follow_up_indicators = [
             'follow up', 'check back', 'contact you', 'let you know',
             'update you', 'monitor', 'review in', 'schedule'
@@ -147,118 +157,205 @@ class MCPResponse:
         
         if any(indicator in answer_lower for indicator in follow_up_indicators):
             self.follow_up_required = True
-    
+
     def _set_references_from_content(self):
+
+        try:
+            # First try to get references from retrieved chunks with heading metadata
+            references = self._extract_dynamic_references()
+            
+            # If no dynamic references found, fall back to keyword-based matching
+            if not references:
+                references = self._extract_fallback_references()
+            
+            # Limit to top 5 most relevant references
+            self.references = references[:5]
+            
+        except Exception as e:
+            print(f"Error extracting references: {e}")
+            self.references = ["General Support Documentation"]
+
+    def _extract_dynamic_references(self):
+      
+        references = []
+        
+        # Get the chunks that were retrieved for this query
+        if hasattr(self, 'retrieved_chunks') and self.retrieved_chunks:
+            for chunk in self.retrieved_chunks:
+                reference = self._extract_clean_reference(chunk)
+                if reference and reference not in references:
+                    references.append(reference)
+        
+        return references
+
+    def _extract_clean_reference(self, chunk):
+        try:
+            metadata = chunk.get('metadata', {})
+            content = chunk.get('content', '')
+            document_type = chunk.get('document_type', '')
+            
+            # Handle FAQ chunks first
+            if document_type == 'faq' or content.startswith('Q:'):
+                if content.startswith('Q:'):
+                    lines = content.split('\n')
+                    question = lines.replace('Q:', '').strip()
+                    return f"FAQ: {question}"
+                else:
+                    return "FAQ Response"
+            
+            # For policy/procedure chunks, get clean section title
+            section_title = metadata.get('section_title', '')
+            subsection_title = metadata.get('subsection_title', '')
+            
+            # Prefer subsection if it exists, otherwise use section
+            if subsection_title:
+                return subsection_title
+            elif section_title:
+                return section_title
+            
+            # Extract from content if metadata is missing
+            title_from_content = self._extract_title_from_content(content)
+            if title_from_content:
+                return title_from_content
+            
+            # Fallback to document title
+            doc_title = metadata.get('parent_title', 'Support Document')
+            return doc_title
+            
+        except Exception as e:
+            print(f"Error creating reference from chunk: {e}")
+            return None
+
+    def _extract_title_from_content(self, content):
+       
+        if not content:
+            return None
+            
+        lines = content.split('\n')
+        
+        for line in lines[:10]:  # Check first 10 lines
+            line = line.strip()
+            
+            # Look for ## section headers (level 2 headings)
+            if line.startswith('## '):
+                title = line[3:].strip()  # Remove "## "
+                return self._clean_section_title(title)
+            
+            # Look for ### subsection headers (level 3 headings)  
+            if line.startswith('### '):
+                title = line[4:].strip()  # Remove "### "
+                return self._clean_section_title(title)
+            
+            # Look for numbered sections (4.1 Something) - NO REGEX
+            if '. ' in line and line.split('.')[0].replace(' ', '').isdigit():
+                parts = line.split('. ', 1)
+                if len(parts) > 1:
+                    return self._clean_section_title(parts[1])
+        
+        return None
+
+    def _clean_section_title(self, title):
+        if not title:
+            return None
+            
+        title = str(title).strip()
+        
+        # Remove leading numbers and dots using string operations only
+        while title and (title[0].isdigit() or title[0] in '. '):
+            # Remove leading digits
+            while title and title[0].isdigit():
+                title = title[1:]
+            # Remove leading dots and spaces
+            while title and title[0] in '. ':
+                title = title[1:]
+            title = title.strip()
+        
+        # Remove common document prefixes
+        prefixes_to_remove = [
+            'Document: ',
+            'SECTION ',
+            'Section ',
+            'DOMAIN SUSPENSION GUIDELINES',
+            'PAYMENT FAILURES AND ACCOUNT SUSPENSION',
+            'PROHIBITED ACTIVITIES',
+            'WEBSITE SECURITY POLICY',
+            'EMAIL HOSTING POLICY'
+        ]
+        
+        for prefix in prefixes_to_remove:
+            if title.upper().startswith(prefix.upper()):
+                title = title[len(prefix):].strip()
+        
+        # Clean up extra whitespace - no regex
+        while '  ' in title:  # Replace double spaces with single
+            title = title.replace('  ', ' ')
+        title = title.strip()
+        
+        # Capitalize properly if not empty
+        if title:
+            title = title.title()
+        
+        # Truncate if too long
+        if len(title) > 60:
+            title = title[:57] + "..."
+        
+        return title if title else None
+
+    def _extract_fallback_references(self):
         answer_lower = self.answer.lower()
         references = []
-        if any(term in answer_lower for term in ['domain suspend', 'suspended', 'suspension', 'whois']):
-            references.extend([
-                "Domain Management Policy v2.3 - Section 4.1: Suspension Triggers",
-                "Domain Management Policy v2.3 - Section 4.2: Suspension Process",
-                "Domain Management Policy v2.3 - Section 4.3: Reactivation Requirements"
-            ])
-        if any(term in answer_lower for term in ['whois', 'contact information', 'registrant', 'verify email']):
-            references.extend([
-                "Domain Management Policy v2.3 - Section 4.1.A: WHOIS Compliance Issues",
-                "FAQ: Why was my domain suspended without notice?"
-            ])
         
-        if any(term in answer_lower for term in ['malware', 'phishing', 'policy violation', 'abuse', 'content']):
-            references.extend([
-                "Domain Management Policy v2.3 - Section 4.1.B: Terms of Service Violations",
-                "Acceptable Use Policy - Section 6.1: Malicious Software",
-                "Website Security Policy- Section 7.2: Malware Detection",
-                "Website Security Policy- Section 7.3: DDoS Protection",
-                "FAQ: My domain was suspended for malware but my site is clean now"
-            ])
-        if any(term in answer_lower for term in ['payment', 'billing', 'charge', 'invoice', 'fee']):
-            references.extend([
-                "Billing and Payment Terms v1.8 - Section 2.1: Grace Period Policy",
-                "Billing and Payment Terms v1.8 - Section 2.2: Acceptable Payment Methods",
-                "FAQ: My payment failed but my card works everywhere else"
-            ])
+        # Domain suspension
+        if any(term in answer_lower for term in ['domain suspend', 'suspended', 'suspension']):
+            references.append("Suspension Triggers")
+            references.append("Suspension Process")
+            references.append("Reactivation Requirements")
         
-        if any(term in answer_lower for term in ['chargeback', 'dispute', 'bank dispute']):
-            references.extend([
-                "Billing and Payment Terms v1.8 - Section 2.4: Chargeback Protection",
-                "FAQ: Why did my account get suspended for a chargeback?"
-            ])
-    
-        if any(term in answer_lower for term in ['refund', 'money back', 'unused time', 'cancel']):
-            references.extend([
-                "Billing and Payment Terms v1.8 - Section 2.3: Refund Policy",
-                "FAQ: Can I get a refund for unused time on my hosting plan?"
-            ])
+        # WHOIS issues
+        if any(term in answer_lower for term in ['whois', 'contact information', 'registrant']):
+            references.append("WHOIS Compliance Issues")
+            references.append("Domain Contact Verification")
         
-        if any(term in answer_lower for term in ['dns', 'nameserver', 'propagation', 'technical']):
-            references.extend([
-                "Escalation Matrix and Response Procedures - DNS Propagation Problems",
-                "Escalation Matrix and Response Procedures - Escalation Criteria"
-            ])
+        # Billing issues
+        if any(term in answer_lower for term in ['payment', 'billing', 'charge']):
+            references.append("Grace Period Policy")
+            references.append("Payment Methods")
         
-        if any(term in answer_lower for term in ['email', 'mail', 'mx record', 'smtp', 'delivery']):
-            references.extend([
-                "Escalation Matrix and Response Procedures - Email Delivery Issues",
-                "Email Hosting Policy- Section 8",
-                "FAQ: I can't receive emails but can send them fine"
-            ])
+        # Technical issues
+        if any(term in answer_lower for term in ['dns', 'nameserver', 'propagation']):
+            references.append("DNS Configuration Problems")
+            references.append("Technical Support Procedures")
         
-        if any(term in answer_lower for term in ['ssl', 'certificate', 'https', 'security certificate']):
-            references.extend([
-                "Escalation Matrix and Response Procedures - SSL Certificate Problems",
-                "Website Security Policy- Section 7.1: SSL Certificate Requirements ",
-                "FAQ: My SSL certificate shows as invalid"
-            ])
+        # Email issues
+        if any(term in answer_lower for term in ['email', 'mail', 'mx record']):
+            references.append("Email Delivery Issues")
+            references.append("MX Record Configuration")
         
-        if any(term in answer_lower for term in ['slow', 'performance', 'loading', 'website', 'optimize']):
-            references.extend([
-                "FAQ: My website is loading slowly. What can I do?",
-                "Escalation Matrix and Response Procedures - Response Time Commitments"
-            ])
+        # SSL issues
+        if any(term in answer_lower for term in ['ssl', 'certificate', 'https']):
+            references.append("SSL Certificate Problems")
+            references.append("Certificate Installation")
         
-        if any(term in answer_lower for term in ['transfer', 'move domain', 'registrar']):
-            references.extend([
-                "FAQ: Can I transfer my domain while it's suspended?"
-            ])
+        # Security issues
+        if any(term in answer_lower for term in ['malware', 'security', 'abuse']):
+            references.append("Malware Detection")
+            references.append("Security Policy Violations")
         
-        if any(term in answer_lower for term in ['appeal', 'dispute', 'contest', 'disagree', 'error']):
-            references.extend([
-                "Domain Management Policy v2.3 - Section 4.4: Appeals Process"
-            ])
+        # Refunds
+        if any(term in answer_lower for term in ['refund', 'money back']):
+            references.append("Refund Policy")
         
-        if any(term in answer_lower for term in ['reactivate', 'restore', 'unsuspend', '24-48 hours','recovery']):
-            references.extend([
-                "Domain Management Policy v2.3 - Section 4.3: Reactivation Requirements",
-                "Backup Schedule v2.3 - Section 11",
-                "Recovery Procedures - Section 12",
-                "FAQ: How long does domain reactivation take?"
-            ])
+        # Default if none found
+        if not references:
+            references = ["General Support Guidelines"]
         
-        if any(term in answer_lower for term in ['spam', 'malicious', 'prohibited', 'acceptable use']):
-            references.extend([
-                "Acceptable Use Policy - Section 6.1: Malicious Software",
-                "Acceptable Use Policy - Section 6.2: Spam and Unsolicited Communications",
-                "Acceptable Use Policy - Section 6.3: Content Restrictions"
-            ])
-        
-        unique_references = list(dict.fromkeys(references))[:5]
-
-        if not unique_references:
-            if any(term in answer_lower for term in ['domain', 'website', 'site']):
-                unique_references = ["Domain Management Policy v2.3 - General Provisions"]
-            elif any(term in answer_lower for term in ['payment', 'billing']):
-                unique_references = ["Billing and Payment Terms v1.8 - General Terms"]
-            elif any(term in answer_lower for term in ['technical', 'support']):
-                unique_references = ["Escalation Matrix and Response Procedures - General Support"]
-            elif any(term in answer_lower for term in ['memory', 'storage']):
-                unique_references = ["Storage Quotas- Section 9"]
-            else:
-                unique_references = ["General Support Documentation"]
-        
-        self.references = unique_references
+        return references
     
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        result = asdict(self)
+        # Remove retrieved_chunks from the output as it's internal
+        result.pop('retrieved_chunks', None)
+        return result
     
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
@@ -345,7 +442,6 @@ class MCPResponse:
 
 @dataclass
 class ErrorResponse:
-    
     error_code: str
     message: str
     timestamp: datetime = field(default_factory=datetime.now)

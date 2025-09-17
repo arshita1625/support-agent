@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """Load support documents into the knowledge base."""
-from typing import List
+from typing import List, Dict, Tuple, Optional
 import sys
 import os
 from pathlib import Path
 import json
 from datetime import datetime
+import re
+
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+
 from src.models.document import Document, DocumentChunk
+
 
 class DocumentLoader:
     """Load and process support documents."""
@@ -26,6 +30,93 @@ class DocumentLoader:
             self.processed_dir = project_root / self.processed_dir
             
         self.processed_dir.mkdir(exist_ok=True, parents=True)
+    
+    def _parse_markdown_headings(self, content: str) -> List[Dict]:
+        """Extract all markdown headings (## and ###) with their positions."""
+        headings = []
+        lines = content.split('\n')
+        char_position = 0
+        
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            
+            # Look for ## (level 2) and ### (level 3) headings
+            if line_stripped.startswith('## ') and not line_stripped.startswith('### '):
+                title = line_stripped[3:].strip()  # Remove "## "
+                headings.append({
+                    'level': 2,
+                    'title': self._clean_heading_title(title),
+                    'raw_title': title,
+                    'line_number': i,
+                    'char_position': char_position
+                })
+            elif line_stripped.startswith('### '):
+                title = line_stripped[4:].strip()  # Remove "### "
+                headings.append({
+                    'level': 3,
+                    'title': self._clean_heading_title(title),
+                    'raw_title': title,
+                    'line_number': i,
+                    'char_position': char_position
+                })
+            
+            # Update character position for next line
+            char_position += len(line) + 1  # +1 for newline character
+        
+        return headings
+    
+    def _clean_heading_title(self, title: str) -> str:
+        """Clean heading title by removing numbers and extra formatting."""
+        if not title:
+            return ""
+        
+        title = title.strip()
+        
+        # Remove leading numbers and dots (like "4.1" or "1.")
+        title = re.sub(r'^\d+(\.\d+)*\.?\s*', '', title)
+        
+        # Remove common prefixes
+        prefixes_to_remove = [
+            'SECTION ',
+            'Section ',
+        ]
+        
+        for prefix in prefixes_to_remove:
+            if title.upper().startswith(prefix.upper()):
+                title = title[len(prefix):].strip()
+        
+        # Clean up extra whitespace
+        title = re.sub(r'\s+', ' ', title).strip()
+        
+        # Capitalize properly
+        title = title.title()
+        
+        return title
+    
+    def _find_parent_headings(self, chunk_start_char: int, headings: List[Dict]) -> Tuple[Optional[str], Optional[str]]:
+        """Find the parent section (##) and subsection (###) for a given chunk position."""
+        parent_section = None
+        parent_subsection = None
+        
+        # Find headings that come before this chunk
+        relevant_headings = [h for h in headings if h['char_position'] <= chunk_start_char]
+        
+        # Find the closest level 2 heading (section)
+        level_2_headings = [h for h in relevant_headings if h['level'] == 2]
+        if level_2_headings:
+            parent_section = level_2_headings[-1]['title']  # Last/closest one
+        
+        # Find the closest level 3 heading (subsection) after the last level 2
+        if level_2_headings:
+            last_section_pos = level_2_headings[-1]['char_position']
+            level_3_after_section = [
+                h for h in relevant_headings 
+                if h['level'] == 3 and h['char_position'] > last_section_pos
+            ]
+            if level_3_after_section:
+                parent_subsection = level_3_after_section[-1]['title']  # Last/closest one
+        
+        return parent_section, parent_subsection
         
     def load_document_from_file(self, file_path: Path) -> Document:
         """Load a document from a markdown file with enhanced metadata extraction."""
@@ -64,6 +155,7 @@ class DocumentLoader:
             "filename": file_path.name,
             "document_structure": self._analyze_document_structure(content)
         })
+        
         document = Document(
             content=content,
             title=title,
@@ -229,6 +321,7 @@ class DocumentLoader:
             metadata["complexity"] = "medium"
         else:
             metadata["complexity"] = "low"
+        
         impact_keywords = {
             "high": ["suspend", "down", "not working", "broken", "lost", "cannot access"],
             "medium": ["delayed", "slow", "issue", "problem", "difficulty"],
@@ -239,6 +332,7 @@ class DocumentLoader:
             if any(keyword in content_lower for keyword in keywords):
                 metadata["customer_impact"] = impact
                 break
+        
         escalation_keywords = [
             "policy violation", "fraud", "security breach", "malware", 
             "legal issue", "compliance violation", "urgent", "critical",
@@ -257,7 +351,6 @@ class DocumentLoader:
         return metadata
 
     def _analyze_document_structure(self, content: str) -> dict:
-        
         structure = {
             "has_headings": False,
             "heading_levels": [],
@@ -282,19 +375,14 @@ class DocumentLoader:
                 structure["section_count"] += 1
             elif line.startswith(('-', '*', '+')) or (line and line[0].isdigit() and '. ' in line):
                 structure["has_lists"] = True
-            
             elif '|' in line and line.count('|') >= 2:  
                 structure["has_tables"] = True
-        
             elif line.startswith('```'):
                 code_block_count += 1
-            
             elif '`' in line and line.count('`') >= 2:
                 structure["has_code_blocks"] = True
-            
             elif '[' in line and '](' in line:
                 structure["has_links"] = True
-            
             elif line and not any(line.startswith(marker) for marker in ['#', '-', '*', '+', '>', '|']):
                 structure["paragraph_count"] += 1
         
@@ -302,16 +390,19 @@ class DocumentLoader:
             structure["has_code_blocks"] = True
         elif code_block_count % 2 == 1:
             structure["has_code_blocks"] = True
+        
         structure["heading_levels"] = list(set(structure["heading_levels"]))
         
         return structure
 
-
     def chunk_document(self, document: Document, chunk_size: int = 1000):
-        
         chunks = []
         content = document.content
         print(f" Chunking document: {len(content)} characters")
+        
+        # Parse headings first for metadata association
+        headings = self._parse_markdown_headings(content)
+        print(f" Found {len(headings)} headings in document")
         
         if '##' in content:
             import re
@@ -353,22 +444,34 @@ class DocumentLoader:
             for i, section in enumerate(sections):
                 section_content = section['content']
                 
+                # Find parent headings for this section
+                parent_section, parent_subsection = self._find_parent_headings(
+                    section['start_pos'], headings
+                )
+                
                 if len(section_content) > chunk_size:
                     sub_chunks = self._split_long_content(section_content, chunk_size)
                     
                     for j, sub_chunk in enumerate(sub_chunks):
+                        # Find more specific headings for sub-chunks
+                        sub_chunk_start = section['start_pos'] + (j * chunk_size)
+                        sub_parent_section, sub_parent_subsection = self._find_parent_headings(
+                            sub_chunk_start, headings
+                        )
+                        
                         chunk = DocumentChunk(
                             parent_document_id=document.id,
                             content=sub_chunk,
                             chunk_index=len(chunks),
-                            start_char=section['start_pos'] + (j * chunk_size),  # Approximate
-                            end_char=section['start_pos'] + (j * chunk_size) + len(sub_chunk),
+                            start_char=sub_chunk_start,
+                            end_char=sub_chunk_start + len(sub_chunk),
                             document_type=document.document_type,
                             metadata={
                                 **document.metadata,
                                 "chunk_focus": self._extract_chunk_focus(sub_chunk),
                                 "parent_title": document.title,
-                                "section_title": section['title'],
+                                "section_title": sub_parent_section or parent_section,
+                                "subsection_title": sub_parent_subsection,
                                 "section_index": i,
                                 "sub_chunk_index": j,
                                 "is_sub_chunk": True
@@ -387,19 +490,19 @@ class DocumentLoader:
                             **document.metadata,
                             "chunk_focus": self._extract_chunk_focus(section_content),
                             "parent_title": document.title,
-                            "section_title": section['title'],
+                            "section_title": parent_section,
+                            "subsection_title": parent_subsection,
                             "section_index": i,
                             "is_sub_chunk": False
                         }
                     )
                     chunks.append(chunk)
         else:
-            chunks = self._sliding_window_chunks(document, chunk_size)
+            chunks = self._sliding_window_chunks(document, chunk_size, headings)
         
         return chunks
 
     def _split_long_content(self, content: str, chunk_size: int) -> List[str]:
-        
         chunks = []
         words = content.split()
         current_chunk = []
@@ -423,9 +526,8 @@ class DocumentLoader:
             chunks.append(' '.join(current_chunk))
         
         return chunks
-
     
-    def _sliding_window_chunks(self, document: Document, chunk_size: int):
+    def _sliding_window_chunks(self, document: Document, chunk_size: int, headings: List[Dict]):
         chunks = []
         content = document.content
         overlap = 200
@@ -444,6 +546,9 @@ class DocumentLoader:
             if len(chunk_content) < 50:
                 break
             
+            # Find parent headings for this chunk
+            parent_section, parent_subsection = self._find_parent_headings(start, headings)
+            
             chunk = DocumentChunk(
                 parent_document_id=document.id,
                 content=chunk_content,
@@ -454,7 +559,9 @@ class DocumentLoader:
                 metadata={
                     **document.metadata,
                     "chunk_focus": self._extract_chunk_focus(chunk_content),
-                    "parent_title": document.title
+                    "parent_title": document.title,
+                    "section_title": parent_section,
+                    "subsection_title": parent_subsection
                 }
             )
             
@@ -475,31 +582,26 @@ class DocumentLoader:
             "billing_dispute": ["billing dispute", "charge dispute", "payment dispute"],
             "fraud_security": ["fraud", "security breach", "malware", "phishing", "hack"],
             
-            
             "whois_update": ["whois", "contact information", "registrant", "update contact"],
             "domain_transfer": ["domain transfer", "transfer domain", "move domain"],
             "dns_management": ["dns", "nameserver", "name server", "dns record"],
             "email_issues": ["email", "mail", "smtp", "pop", "imap"],
             "ssl_certificate": ["ssl", "certificate", "https", "security certificate"],
             
-            
             "reactivation": ["reactivate", "reactivation", "restore", "reinstate"],
             "verification": ["verify", "verification", "confirm", "validate"],
             "payment_processing": ["payment", "billing", "invoice", "charge"],
             "refund_processing": ["refund", "refunds", "money back", "reimbursement"],
             
-            
             "escalation": ["escalate", "escalation", "manager", "supervisor"],
             "documentation": ["document", "documentation", "proof", "evidence"],
             "technical_support": ["technical", "tech support", "server", "hosting"],
-            
             
             "policy": ["policy", "terms", "conditions", "agreement", "rules"],
             "faq": ["question", "answer", "q:", "a:", "frequently asked"],
             "procedure": ["step", "process", "procedure", "how to", "instructions"],
             "general": []  
         }
-        
         
         for focus, keywords in focus_mapping.items():
             if focus == "general":
@@ -508,10 +610,8 @@ class DocumentLoader:
                 return focus
         
         return "general"
-
     
     def load_all_documents(self):
-        
         documents = []
         all_chunks = []
         
@@ -528,12 +628,20 @@ class DocumentLoader:
             return documents, all_chunks
         
         for file_path in markdown_files:
-            
             try:
                 document = self.load_document_from_file(file_path)
                 documents.append(document)
                 chunks = self.chunk_document(document)
                 all_chunks.extend(chunks)
+                
+                # Print heading extraction summary
+                headings = self._parse_markdown_headings(document.content)
+                if headings:
+                    print(f" Extracted headings from {file_path.name}:")
+                    for heading in headings[:5]:  # Show first 5
+                        print(f"   {'  ' * (heading['level']-2)}-  {heading['title']}")
+                    if len(headings) > 5:
+                        print(f"   ... and {len(headings)-5} more")
                 
             except Exception as e:
                 print(f"Error loading {file_path.name}: {e}")
@@ -547,21 +655,54 @@ class DocumentLoader:
         documents_data = [doc.to_dict() for doc in documents]
         with open(self.processed_dir / "documents.json", 'w', encoding='utf-8') as f:
             json.dump(documents_data, f, indent=2, default=str)
+        
         chunks_data = [chunk.to_dict() for chunk in chunks]
         with open(self.processed_dir / "chunks.json", 'w', encoding='utf-8') as f:
             json.dump(chunks_data, f, indent=2, default=str)
+        
+        # Also save a summary of headings for debugging
+        heading_summary = {}
+        for chunk in chunks:
+            doc_title = chunk.metadata.get('parent_title', 'Unknown')
+            section = chunk.metadata.get('section_title')
+            subsection = chunk.metadata.get('subsection_title')
+            
+            if doc_title not in heading_summary:
+                heading_summary[doc_title] = {'sections': set(), 'subsections': set()}
+            
+            if section:
+                heading_summary[doc_title]['sections'].add(section)
+            if subsection:
+                heading_summary[doc_title]['subsections'].add(subsection)
+        
+        # Convert sets to lists for JSON serialization
+        for doc in heading_summary.values():
+            doc['sections'] = list(doc['sections'])
+            doc['subsections'] = list(doc['subsections'])
+        
+        with open(self.processed_dir / "heading_summary.json", 'w', encoding='utf-8') as f:
+            json.dump(heading_summary, f, indent=2, default=str)
     
     def print_summary(self, documents, chunks):
-        
         if documents:
+            print(f"\n📄 Processed {len(documents)} documents:")
             for doc in documents:
-                print(f"   • {doc.title} ({doc.document_type})")
+                print(f"   -  {doc.title} ({doc.document_type})")
+        
         if chunks:
             chunk_sizes = [len(chunk.content) for chunk in chunks]
-        
-def main():
+            print(f"\n📦 Created {len(chunks)} chunks:")
+            print(f"   -  Average size: {sum(chunk_sizes)//len(chunk_sizes)} characters")
+            
+            # Count chunks with heading metadata
+            chunks_with_sections = len([c for c in chunks if c.metadata.get('section_title')])
+            chunks_with_subsections = len([c for c in chunks if c.metadata.get('subsection_title')])
+            
+            print(f"   -  Chunks with section headings: {chunks_with_sections}")
+            print(f"   -  Chunks with subsection headings: {chunks_with_subsections}")
 
-    print("🚀 Loading Support Documents...\n")
+def main():
+    print("🚀 Loading Support Documents with Heading Extraction...\n")
 
     # Initialize loader
     loader = DocumentLoader()
