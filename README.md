@@ -84,7 +84,7 @@ docker compose down
 
 The application will be available at:  
 - **Main API:** http://localhost:8000  
-- **Swagger Docs:** http://localhost:8000/docs  
+- **Swagger Docs(Interative API):** http://localhost:8000/docs  
 
 ---
 
